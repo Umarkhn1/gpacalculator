@@ -34,6 +34,7 @@ function lmsDevApi() {
 }
 
 export default defineConfig({
+  base: '/',
   plugins: [react(), lmsDevApi()],
   build: {
     outDir: 'dist',
