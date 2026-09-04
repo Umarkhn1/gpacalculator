@@ -328,8 +328,8 @@ export default function App() {
         <p className="foot-made">{t.footerMade}</p>
         <p className="foot-by">
           {t.footerBy}{' '}
-          <a href="https://t.me/umarkhn_1" target="_blank" rel="noreferrer">
-            Umarkhn1
+          <a href="https://www.umar-dev.uz/" target="_blank" rel="noreferrer">
+            {"Umarxo'ja O'tkurxo'jayev"}
           </a>
         </p>
       </footer>
