@@ -322,6 +322,9 @@ body {
 .hero-num.tone-high {
   color: #b6f5cf;
 }
+.hero-num.tone-norm {
+  color: #ffe6b8;
+}
 .hero-num.tone-low {
   color: #ffd0cb;
 }
@@ -368,6 +371,12 @@ body {
 }
 .st-good .st-icon {
   background: var(--primary);
+}
+.status-pill.st-normal {
+  color: var(--amber);
+}
+.st-normal .st-icon {
+  background: var(--amber);
 }
 .status-pill.st-critical {
   color: var(--red);

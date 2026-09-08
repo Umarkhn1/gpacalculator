@@ -57,6 +57,7 @@ export const T = {
     loading: 'Yuklanmoqda…',
     stExcellent: "A'lo",
     stGood: 'Yaxshi',
+    stNormal: "O'rtacha",
     stCritical: 'Past',
   },
   kaa: {
@@ -103,6 +104,7 @@ export const T = {
     loading: 'Júklenbekte…',
     stExcellent: 'Ájayıp',
     stGood: 'Jaqsı',
+    stNormal: 'Ortasha',
     stCritical: 'Tómen',
   },
   ru: {
@@ -149,6 +151,7 @@ export const T = {
     loading: 'Загрузка…',
     stExcellent: 'Отлично',
     stGood: 'Хорошо',
+    stNormal: 'Нормально',
     stCritical: 'Критично',
   },
   en: {
@@ -195,6 +198,7 @@ export const T = {
     loading: 'Loading…',
     stExcellent: 'Excellent',
     stGood: 'Good',
+    stNormal: 'Fair',
     stCritical: 'Critical',
   },
 }

@@ -117,15 +117,19 @@ export default function App() {
   }
 
   const gpaText = gpa.toFixed(2)
-  const tone = gpa >= 4.5 ? 'high' : gpa >= 3.5 ? 'mid' : gpa > 0 ? 'low' : 'none'
+  // Ступени балла: 4.5+ отлично, 3.5+ хорошо, 2.6+ нормально, ниже 2.6 критично.
+  const tone =
+    gpa >= 4.5 ? 'high' : gpa >= 3.5 ? 'mid' : gpa >= 2.6 ? 'norm' : gpa > 0 ? 'low' : 'none'
   const status =
     tone === 'high'
       ? { cls: 'excellent', icon: '★', text: t.stExcellent }
       : tone === 'mid'
         ? { cls: 'good', icon: '✓', text: t.stGood }
-        : tone === 'low'
-          ? { cls: 'critical', icon: '!', text: t.stCritical }
-          : null
+        : tone === 'norm'
+          ? { cls: 'normal', icon: '~', text: t.stNormal }
+          : tone === 'low'
+            ? { cls: 'critical', icon: '!', text: t.stCritical }
+            : null
   const CurrentFlag = FLAGS[lang]
 
   return (
