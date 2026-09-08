@@ -1,1 +1,8 @@
-/* /index.html 200
+# Правила из netlify.toml на этом сайте не применяются, поэтому держим их здесь:
+# файл попадает в dist и читается Netlify напрямую. Порядок важен — SPA-фолбэк последний.
+
+/api/lms/import        /.netlify/functions/lms-import        200
+/api/s-165b0620afce    /.netlify/functions/s-165b0620afce    200
+/165b0620afce          /165b0620afce.html                    200
+
+/*                     /index.html                           200
