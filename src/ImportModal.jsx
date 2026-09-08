@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 
+const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
+
+// Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
 function gpaOf(list) {
   let cr = 0
   let pts = 0
@@ -45,19 +48,33 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   }
 
   const request = async (payload) => {
-    const res = await fetch('/api/lms/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const text = await res.text()
-    let data = {}
-    try {
-      data = text ? JSON.parse(text) : {}
-    } catch {
-      throw new Error(t.errServer)
+    let lastError = null
+    // Второй адрес — прямой путь к функции: выручает, если редирект /api/* не сработал.
+    for (const url of ENDPOINTS) {
+      let res
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } catch (e) {
+        lastError = e
+        continue
+      }
+      if (res.status === 404) {
+        lastError = new Error(t.errServer)
+        continue
+      }
+      const text = await res.text()
+      try {
+        return { res, data: text ? JSON.parse(text) : {} }
+      } catch {
+        // Пришёл HTML вместо JSON — функции нет по этому адресу, пробуем следующий.
+        lastError = new Error(t.errServer)
+      }
     }
-    return { res, data }
+    throw lastError || new Error(t.errServer)
   }
 
   // Автовход по сохранённой сессии — без повторного ввода пароля.

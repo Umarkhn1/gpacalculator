@@ -4,10 +4,30 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  # Node 18 на Netlify больше не поддерживается — сборка функций на нём падала.
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@netlify/blobs"]
+
 # Фронтенд обращается к /api/lms/import — Netlify перенаправляет на функцию.
 [[redirects]]
   from = "/api/lms/import"
   to = "/.netlify/functions/lms-import"
+  status = 200
+
+# Приватный API статистики.
+[[redirects]]
+  from = "/api/s-165b0620afce"
+  to = "/.netlify/functions/s-165b0620afce"
+  status = 200
+
+# Страница статистики (не в индексе, доступ по ключу).
+[[redirects]]
+  from = "/165b0620afce"
+  to = "/165b0620afce.html"
   status = 200
 
 # SPA-фолбэк на index.html
@@ -15,3 +35,8 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/165b0620afce*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

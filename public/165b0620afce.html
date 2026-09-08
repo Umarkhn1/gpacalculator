@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <title>GPA · статистика</title>
+    <style>
+      :root {
+        --bg: #0f1216;
+        --card: #171b21;
+        --line: #262c35;
+        --txt: #e8ecf1;
+        --dim: #96a0ad;
+        --acc: #4f9cf9;
+        --ok: #35c07f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--txt);
+        font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 60px; }
+      h1 { font-size: 20px; margin: 0; }
+      .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+      .sp { flex: 1; }
+      button, input {
+        font: inherit;
+        color: var(--txt);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 13px;
+      }
+      button { cursor: pointer; }
+      button:hover { border-color: var(--acc); }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+      .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+      .card b { display: block; font-size: 28px; line-height: 1.2; }
+      .card span { color: var(--dim); font-size: 13px; }
+      .sect { margin-top: 26px; }
+      .sect h2 { font-size: 15px; color: var(--dim); font-weight: 600; margin: 0 0 10px; }
+      .chart { display: flex; align-items: flex-end; gap: 4px; height: 130px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; overflow-x: auto; }
+      .bar { flex: 1 0 14px; background: linear-gradient(180deg, var(--acc), #2b6fc4); border-radius: 4px 4px 0 0; min-height: 3px; }
+      .tbl-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+      table { border-collapse: collapse; width: 100%; font-size: 14px; }
+      th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      th { color: var(--dim); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+      tr:last-child td { border-bottom: 0; }
+      .gpa { color: var(--ok); font-weight: 600; }
+      .msg { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; color: var(--dim); }
+      .gate { max-width: 380px; margin: 12vh auto; text-align: center; }
+      .gate input { width: 100%; margin: 14px 0; text-align: center; letter-spacing: .06em; }
+      .gate button { width: 100%; background: var(--acc); border-color: var(--acc); color: #06101d; font-weight: 600; }
+      .err { color: #ff8484; font-size: 14px; min-height: 20px; }
+      .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; color: var(--dim); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap" id="app"></div>
+    <script>
+      const API = '/api/s-165b0620afce'
+      const KEY_STORE = 'gpa-stats-key'
+      const app = document.getElementById('app')
+      const esc = (s) => String(s == null ? '' : s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c])
+      const dt = (s) => (s ? new Date(s).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—')
+
+      function gate(err) {
+        app.innerHTML =
+          '<div class="gate"><h1>Статистика</h1>' +
+          '<input id="k" type="password" placeholder="ключ доступа" autofocus />' +
+          '<div class="err">' + esc(err || '') + '</div>' +
+          '<button id="go">Открыть</button></div>'
+        const go = () => load(document.getElementById('k').value.trim())
+        document.getElementById('go').onclick = go
+        document.getElementById('k').onkeydown = (e) => { if (e.key === 'Enter') go() }
+      }
+
+      async function load(key) {
+        if (!key) return gate('Введите ключ')
+        app.innerHTML = '<div class="msg">Загрузка…</div>'
+        let res, data
+        try {
+          res = await fetch(API, { headers: { 'x-access-key': key } })
+          data = await res.json()
+        } catch (e) {
+          localStorage.removeItem(KEY_STORE)
+          return gate('Сервер недоступен')
+        }
+        if (res.status === 401) {
+          localStorage.removeItem(KEY_STORE)
+          return gate('Неверный ключ')
+        }
+        if (!res.ok) return gate(data.error || 'Ошибка ' + res.status)
+        localStorage.setItem(KEY_STORE, key)
+        render(data, key)
+      }
+
+      function render(d, key) {
+        const t = d.totals || {}
+        const max = Math.max(1, ...(d.daily || []).map((x) => x.count))
+        const bars = (d.daily || [])
+          .slice(-60)
+          .map((x) => '<div class="bar" style="height:' + Math.round((x.count / max) * 100) + '%" title="' + x.date + ': ' + x.count + '"></div>')
+          .join('')
+        const rows = (d.users || [])
+          .map(
+            (u) =>
+              '<tr><td>' + esc(u.full || u.name || '—') +
+              '</td><td class="mono">' + esc(u.login || '—') +
+              '</td><td>' + esc(u.group || '—') +
+              '</td><td class="gpa">' + (u.gpa ? u.gpa.toFixed ? u.gpa.toFixed(2) : u.gpa : '—') +
+              '</td><td>' + (u.credits ?? '—') +
+              '</td><td>' + (u.subjects ?? '—') +
+              '</td><td>' + (u.imports || 1) +
+              '</td><td>' + dt(u.first) +
+              '</td><td>' + dt(u.last) + '</td></tr>',
+          )
+          .join('')
+
+        app.innerHTML =
+          '<div class="head"><h1>GPA Calculator · статистика</h1><div class="sp"></div>' +
+          '<button id="csv">CSV</button><button id="reload">Обновить</button><button id="out">Выйти</button></div>' +
+          '<div class="cards">' +
+          '<div class="card"><b>' + (t.imports || 0) + '</b><span>импортов всего</span></div>' +
+          '<div class="card"><b>' + (t.students || 0) + '</b><span>студентов</span></div>' +
+          '<div class="card"><b>' + (t.avgGpa || 0) + '</b><span>средний GPA</span></div>' +
+          '<div class="card"><b>' + (t.today || 0) + '</b><span>сегодня</span></div>' +
+          '</div>' +
+          '<div class="sect"><h2>Импорты по дням</h2><div class="chart">' + (bars || '<span class="msg">нет данных</span>') + '</div></div>' +
+          '<div class="sect"><h2>Студенты</h2>' +
+          (rows
+            ? '<div class="tbl-wrap"><table><thead><tr><th>ФИО</th><th>Логин</th><th>Группа</th><th>GPA</th><th>Кредиты</th><th>Предметы</th><th>Импортов</th><th>Первый</th><th>Последний</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+            : '<div class="msg">Пока никто не импортировал оценки.</div>') +
+          '</div>' +
+          (d.stores && d.stores.length
+            ? '<div class="sect"><h2>Хранилища</h2><div class="msg mono">' +
+              d.stores.map((s) => esc(s.name) + ': events ' + s.events + ', users ' + s.users + (s.other ? ', other ' + s.other : '')).join('<br>') +
+              '</div></div>'
+            : '') +
+          (d.error ? '<div class="sect"><div class="msg">Хранилище недоступно: ' + esc(d.error) + '</div></div>' : '')
+
+        document.getElementById('reload').onclick = () => load(key)
+        document.getElementById('out').onclick = () => { localStorage.removeItem(KEY_STORE); gate('') }
+        document.getElementById('csv').onclick = () => {
+          const head = ['full', 'login', 'group', 'gpa', 'credits', 'subjects', 'imports', 'first', 'last']
+          const csv = [head.join(',')]
+            .concat((d.users || []).map((u) => head.map((k) => JSON.stringify(u[k] ?? '')).join(',')))
+            .join('\n')
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+          a.download = 'gpa-stats.csv'
+          a.click()
+        }
+      }
+
+      const saved = localStorage.getItem(KEY_STORE)
+      if (saved) load(saved)
+      else gate('')
+    </script>
+  </body>
+</html>

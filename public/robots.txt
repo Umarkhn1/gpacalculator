@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /165b0620afce
+Disallow: /api/
 
 Sitemap: https://gpa-calculator-tuit.netlify.app/sitemap.xml

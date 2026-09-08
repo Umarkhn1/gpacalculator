@@ -4,7 +4,9 @@
   "version": "2.0.0",
   "author": "Umarkhn1",
   "type": "module",
-  "engines": { "node": "18.x" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "dev:netlify": "netlify dev",
@@ -12,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@netlify/blobs": "^8.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

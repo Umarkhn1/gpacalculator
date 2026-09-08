@@ -36,4 +36,26 @@ export function FlagEN() {
   )
 }
 
-export const FLAGS = { uz: FlagUZ, ru: FlagRU, en: FlagEN }
+// Флаг Каракалпакстана: синий, жёлтый и зелёный с красными полосами, полумесяц и звёзды.
+export function FlagKAA() {
+  return (
+    <svg viewBox="0 0 30 20" className="flag" aria-hidden="true">
+      <rect width="30" height="20" fill="#ffd500" />
+      <rect width="30" height="6.6" fill="#0099b5" />
+      <rect y="13.4" width="30" height="6.6" fill="#1eb53a" />
+      <rect y="6.6" width="30" height="0.8" fill="#ce1126" />
+      <rect y="12.6" width="30" height="0.8" fill="#ce1126" />
+      <circle cx="5.6" cy="3.3" r="2" fill="#fff" />
+      <circle cx="6.6" cy="3.3" r="1.7" fill="#0099b5" />
+      <g fill="#fff">
+        <circle cx="11" cy="2.2" r="0.45" />
+        <circle cx="13" cy="2.2" r="0.45" />
+        <circle cx="15" cy="2.2" r="0.45" />
+        <circle cx="12" cy="4.2" r="0.45" />
+        <circle cx="14" cy="4.2" r="0.45" />
+      </g>
+    </svg>
+  )
+}
+
+export const FLAGS = { uz: FlagUZ, kaa: FlagKAA, ru: FlagRU, en: FlagEN }
