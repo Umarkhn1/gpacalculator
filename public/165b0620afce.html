@@ -29,7 +29,8 @@
         font-family: var(--sans);
         -webkit-font-smoothing: antialiased;
       }
-      .page { max-width: 1240px; margin: 0 auto; padding: 30px 24px 48px; }
+      /* Таблица широкая — страницу не ограничиваем, поля минимальные. */
+      .page { max-width: none; margin: 0; padding: 24px 14px 44px; }
 
       .topbar {
         display: flex;
@@ -108,7 +109,7 @@
       table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
       th, td { text-align: left; padding: 8px 9px; white-space: nowrap; vertical-align: top; }
       /* Длинные поля переносим, чтобы таблица помещалась по ширине. */
-      td.wrap, th.wrap { white-space: normal; word-break: break-word; min-width: 120px; max-width: 190px; }
+      td.wrap, th.wrap { white-space: normal; word-break: break-word; min-width: 140px; max-width: 260px; }
       thead th {
         position: sticky;
         top: 0;
