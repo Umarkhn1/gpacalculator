@@ -27,14 +27,11 @@ async function blobs(event) {
 async function store(name = STORE) {
   const mod = await blobs()
   if (!mod) return null
+  // Строгая консистентность в этом рантайме недоступна — оставляем обычную.
   try {
-    return mod.getStore({ name, consistency: 'strong' })
+    return mod.getStore(name)
   } catch {
-    try {
-      return mod.getStore(name)
-    } catch {
-      return null
-    }
+    return null
   }
 }
 
