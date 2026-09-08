@@ -133,5 +133,20 @@ export async function readAll(event) {
   }
 
   events.sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
-  return { events, users, stores }
+  return { events, users, stores, scanned: [...names] }
+}
+
+// Диагностика: проверяем, что запись в Blobs вообще работает.
+export async function selfTest(event) {
+  await blobs(event)
+  const s = await store()
+  if (!s) return { blobs: false, reason: 'store-unavailable' }
+  try {
+    const ts = new Date().toISOString()
+    await s.setJSON('diag/probe', { ts })
+    const back = await s.get('diag/probe', { type: 'json' })
+    return { blobs: true, wroteAt: back?.ts || null }
+  } catch (e) {
+    return { blobs: false, reason: e?.message || 'write-failed' }
+  }
 }

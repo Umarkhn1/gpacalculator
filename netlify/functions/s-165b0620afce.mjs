@@ -1,7 +1,7 @@
 // Приватный API статистики. Отдаёт всё, что записано об импортах.
 // Доступ только по ключу: заголовок x-access-key (или x-api-key / Bearer / ?key=).
 
-import { readAll } from './_stats-store.mjs'
+import { readAll, selfTest } from './_stats-store.mjs'
 
 const KEY = process.env.STATS_KEY || 'b8c2d85d8639d6be2baa7a3f'
 
@@ -102,6 +102,13 @@ function aggregate(events, users) {
 
 export const handler = async (event) => {
   if (keyFrom(event) !== KEY) return json(401, { error: 'Нужен ключ доступа' })
+
+  const url0 = new URL(event.rawUrl || 'https://x/', 'https://x/')
+  if (url0.searchParams.get('diag') === '1') {
+    const probe = await selfTest(event)
+    const scan = await readAll(event)
+    return json(200, { diag: probe, scanned: scan.scanned || [], stores: scan.stores || [] })
+  }
 
   const { events = [], users = [], stores = [], error } = await readAll(event)
   const agg = aggregate(events, users)
