@@ -1,7 +1,7 @@
-// Приватный API статистики. Отдаёт всё, что записано об импортах.
+// Приватный API статистики. Отдаёт список студентов, которые импортировали оценки.
 // Доступ только по ключу: заголовок x-access-key (или x-api-key / Bearer / ?key=).
 
-import { readAll, selfTest } from './_stats-store.mjs'
+import { readAll, selfTest, readDiag } from './_stats-store.mjs'
 
 const KEY = process.env.STATS_KEY || 'b8c2d85d8639d6be2baa7a3f'
 
@@ -27,99 +27,93 @@ function keyFrom(event) {
   ).trim()
 }
 
-const day = (ts) => String(ts || '').slice(0, 10)
+// Поля, которые показывает дашборд.
+const FIELDS = [
+  'login',
+  'name',
+  'full',
+  'group',
+  'faculty',
+  'specialty',
+  'birth',
+  'gender',
+  'course',
+  'curator',
+  'eduType',
+  'eduLang',
+  'gpa',
+]
 
-function aggregate(events, users) {
-  const byUser = new Map()
+const pick = (src) => {
+  const out = {}
+  for (const f of FIELDS) out[f] = src[f] ?? ''
+  return out
+}
+
+// Одна строка на студента: последние известные данные + счётчик импортов.
+function students(events, users) {
+  const byId = new Map()
+  const put = (id, row) => {
+    const cur = byId.get(id)
+    if (!cur) {
+      byId.set(id, row)
+      return
+    }
+    // Пустые значения не затирают уже известные.
+    for (const f of FIELDS) if (!cur[f] && row[f]) cur[f] = row[f]
+    cur.imports += row.imports
+    if (row.first && (!cur.first || row.first < cur.first)) cur.first = row.first
+    if (row.last && (!cur.last || row.last > cur.last)) cur.last = row.last
+  }
+
   for (const u of users) {
-    const id = u.login || u.full || u.name || u.key
-    byUser.set(id, {
+    const id = u.login || u.full || u.name
+    if (!id) continue
+    put(id, {
       id,
-      login: u.login || '',
-      name: u.name || '',
-      full: u.full || '',
-      group: u.group || '',
-      faculty: u.faculty || '',
-      gpa: u.gpa ?? null,
-      credits: u.credits ?? null,
-      subjects: u.subjects ?? null,
+      ...pick(u),
       first: u.first || u.ts || '',
       last: u.last || u.ts || '',
       imports: u.imports || 1,
     })
   }
-  // События дополняют сводку — на случай, если сводки по студенту нет.
-  for (const e of events) {
-    const id = e.login || e.full || e.name || e.ip || e.key
-    if (!id) continue
-    const cur = byUser.get(id)
-    if (!cur) {
-      byUser.set(id, {
-        id,
-        login: e.login || '',
-        name: e.name || '',
-        full: e.full || '',
-        group: e.group || '',
-        faculty: e.faculty || '',
-        gpa: e.gpa ?? null,
-        credits: e.credits ?? null,
-        subjects: e.subjects ?? null,
-        first: e.ts,
-        last: e.ts,
-        imports: 1,
-      })
-    } else if (!users.length) {
-      cur.imports += 1
-      if (e.ts < cur.first) cur.first = e.ts
-      if (e.ts > cur.last) cur.last = e.ts
+  // События нужны, если сводки по студенту нет (записи прошлых версий).
+  if (!users.length) {
+    for (const e of events) {
+      const id = e.login || e.full || e.name
+      if (!id) continue
+      put(id, { id, ...pick(e), first: e.ts, last: e.ts, imports: 1 })
     }
   }
 
-  const daily = {}
-  for (const e of events) {
-    const d = day(e.ts)
-    if (d) daily[d] = (daily[d] || 0) + 1
-  }
-
-  const list = [...byUser.values()].sort((a, b) =>
-    String(b.last).localeCompare(String(a.last)),
-  )
-  const gpas = list.map((u) => u.gpa).filter((g) => typeof g === 'number' && g > 0)
-
-  return {
-    totals: {
-      imports: events.length || list.reduce((n, u) => n + (u.imports || 0), 0),
-      students: list.length,
-      avgGpa: gpas.length ? +(gpas.reduce((a, b) => a + b, 0) / gpas.length).toFixed(2) : 0,
-      today: daily[day(new Date().toISOString())] || 0,
-    },
-    daily: Object.entries(daily)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, count]) => ({ date, count })),
-    users: list,
-  }
+  return [...byId.values()].sort((a, b) => String(b.last).localeCompare(String(a.last)))
 }
 
 export const handler = async (event) => {
   if (keyFrom(event) !== KEY) return json(401, { error: 'Нужен ключ доступа' })
 
-  const url0 = new URL(event.rawUrl || 'https://x/', 'https://x/')
-  if (url0.searchParams.get('diag') === '1') {
+  const url = new URL(event.rawUrl || 'https://x/', 'https://x/')
+  const extra = (url.searchParams.get('store') || '').split(',')
+
+  if (url.searchParams.get('diag') === '1') {
     const probe = await selfTest(event)
-    const scan = await readAll(event, (url0.searchParams.get('store') || '').split(',')) 
-    return json(200, { diag: probe, scanned: scan.scanned || [], stores: scan.stores || [] })
+    const scan = await readAll(event, extra)
+    const chunks = await readDiag('info-chunks', event)
+    return json(200, {
+      diag: probe,
+      scanned: scan.scanned || [],
+      stores: scan.stores || [],
+      infoChunks: chunks || null,
+    })
   }
 
-  const extra = (url0.searchParams.get('store') || '').split(',')
-  const { events = [], users = [], stores = [], error } = await readAll(event, extra)
-  const agg = aggregate(events, users)
-  const raw = url0.searchParams.get('raw') === '1'
+  const { events = [], users = [], error } = await readAll(event, extra)
+  const list = students(events, users)
 
   return json(200, {
     ok: true,
     error: error || null,
-    stores,
-    ...agg,
-    events: raw ? events : events.slice(0, 300),
+    students: list,
+    events: url.searchParams.get('raw') === '1' ? events : undefined,
   })
 }

@@ -2,7 +2,7 @@
 // сохранённой сессии) и возвращает учебный план + имя студента + строку сессии.
 // Сессия позволяет повторно импортировать без повторного ввода пароля.
 
-import { recordImport } from './_stats-store.mjs'
+import { recordImport, saveDiag } from './_stats-store.mjs'
 
 const LMS = 'https://lms.tuit.uz'
 const UA =
@@ -136,16 +136,80 @@ function parseStudent(html) {
   return { full, name }
 }
 
-// Группа и направление со страницы /student/info — для дашборда.
-function parseInfo(html) {
-  const grab = (re) => {
-    const m = html.match(re)
-    return m ? strip(m[1]) : ''
+// Разметка /student/info меняется (таблица, список, карточки), поэтому не
+// привязываемся к тегам: разбираем страницу в поток текстовых кусочков и берём
+// значение, идущее сразу за подписью. Апострофы у узбекских слов бывают разные.
+const norm = (s) =>
+  String(s)
+    .replace(/[`´ʻʼ‘’']/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+
+function textChunks(html) {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .split(/<[^>]+>/)
+    .map((t) => norm(strip(t)))
+    .filter((t) => t && t !== ':' && t !== '-' && t !== '—')
+}
+
+// Подписи полей на трёх языках LMS.
+const INFO_LABELS = {
+  group: /^(guruh|guruhi|группа|group)/i,
+  faculty: /(fakultet|факульт|faculty)/i,
+  specialty: /(yo'nalish|mutaxassis|направлен|специальн|specialt|ta'lim dasturi)/i,
+  birth: /(tug'ilgan (sana|kun|yil)|дата рожд|birth ?date|date of birth|туғилган)/i,
+  gender: /^(jinsi|jins|пол|gender|sex)/i,
+  course: /^(kurs|kursi|курс|course|year)/i,
+  curator: /(kurator|tyutor|тьютор|куратор|tutor|mentor)/i,
+  eduType: /(ta'lim (shakli|turi)|o'qish shakli|форма обуч|тип обуч|вид обуч|education (form|type)|form of (study|education))/i,
+  eduLang: /(ta'lim tili|o'qish tili|guruh tili|язык обуч|язык групп|language of|education language)/i,
+  studentId: /(talaba id|student id|hemis|id raqam|shaxsiy raqam)/i,
+}
+// Подпись — это короткий кусочек до двоеточия: «Guruh», «Пол:», «Ta'lim tili».
+const labelHead = (s) => String(s).split(':')[0].trim()
+const matchesLabel = (re, chunk) => {
+  const head = labelHead(chunk)
+  return head.length <= 40 && re.test(head)
+}
+const isLabel = (s) => Object.values(INFO_LABELS).some((re) => matchesLabel(re, s))
+
+// Значение может стоять в том же кусочке («Jinsi: Erkak») или в следующих.
+function pickValue(chunks, i, ok) {
+  const inline = chunks[i].split(/:\s*/).slice(1).join(': ').trim()
+  if (inline && (!ok || ok(inline))) return inline
+  for (let j = i + 1; j < Math.min(i + 4, chunks.length); j += 1) {
+    const v = chunks[j].replace(/:$/, '').trim()
+    if (!v || isLabel(v) || v.length > 120) continue
+    if (!ok || ok(v)) return v
+    return ''
   }
-  return {
-    group: grab(/(?:Гурух|Guruh|Группа|Group)[^<]*<[^>]*>([^<]{1,40})</i),
-    faculty: grab(/(?:Факультет|Fakultet|Faculty)[^<]*<[^>]*>([^<]{1,80})</i),
+  return ''
+}
+
+const VALID = {
+  birth: (v) => /\d{2}[./-]\d{2}[./-]\d{4}|\d{4}[./-]\d{2}[./-]\d{2}/.test(v),
+  gender: (v) => /erkak|ayol|мужск|женск|male|female|o'g'il|qiz/i.test(norm(v)),
+  course: (v) => /^\s*[1-8]\b/.test(v),
+}
+
+// Все поля со страницы /student/info — их показывает дашборд.
+export function parseInfo(html) {
+  const chunks = textChunks(html)
+  const out = {}
+  for (const [field, re] of Object.entries(INFO_LABELS)) {
+    let value = ''
+    for (let i = 0; i < chunks.length && !value; i += 1) {
+      if (matchesLabel(re, chunks[i])) value = pickValue(chunks, i, VALID[field])
+    }
+    out[field] = value
   }
+  // Пол приводим к одному виду, курс — к числу.
+  if (out.gender) {
+    out.gender = /erkak|мужск|male|o'g'il/i.test(norm(out.gender)) ? 'Мужской' : 'Женский'
+  }
+  if (out.course) out.course = (out.course.match(/[1-8]/) || [''])[0]
+  return out
 }
 
 const json = (statusCode, body) => ({
@@ -242,23 +306,28 @@ export const handler = async (event) => {
     const semesters = parseStudyPlan(await planRes.text())
     if (!semesters.length) return json(502, { error: 'Оценки не найдены' })
 
-    // Имя студента.
+    // Данные студента. Страницу пробуем дважды: LMS иногда отвечает пустым.
     let student = { full: '', name: '' }
-    try {
-      const infoRes = await fetch(`${LMS}/student/info`, {
-        headers: { 'User-Agent': UA, Cookie: cookieHeader(cookies) },
-        redirect: 'manual',
-      })
-      if (infoRes.status === 200) {
+    let infoChunks = []
+    for (let attempt = 0; attempt < 2 && !student.full; attempt += 1) {
+      try {
+        const infoRes = await fetch(`${LMS}/student/info`, {
+          headers: { 'User-Agent': UA, Cookie: cookieHeader(cookies) },
+          redirect: 'manual',
+        })
+        if (infoRes.status !== 200) continue
         const infoHtml = await infoRes.text()
         student = { ...parseStudent(infoHtml), ...parseInfo(infoHtml) }
-      }
-    } catch {}
+        infoChunks = textChunks(infoHtml).slice(0, 120)
+      } catch {}
+    }
 
     // Статистика для дашборда. Ошибки записи не должны ломать импорт.
     const headers = event.headers || {}
+    // Слепок подписей страницы — по нему видно, если LMS переименует поля.
+    await saveDiag('info-chunks', { ts: new Date().toISOString(), chunks: infoChunks }, event)
     await recordImport({
-      login: login_ || '',
+      login: login_ || student.studentId || '',
       student,
       ...gpaOf(semesters),
       semesters: semesters.length,

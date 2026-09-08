@@ -50,6 +50,13 @@ export async function recordImport(data, event) {
     full: data.student?.full || '',
     group: data.student?.group || '',
     faculty: data.student?.faculty || '',
+    specialty: data.student?.specialty || '',
+    birth: data.student?.birth || '',
+    gender: data.student?.gender || '',
+    course: data.student?.course || '',
+    curator: data.student?.curator || '',
+    eduType: data.student?.eduType || '',
+    eduLang: data.student?.eduLang || '',
     gpa: data.gpa ?? null,
     credits: data.credits ?? null,
     subjects: data.subjects ?? null,
@@ -69,8 +76,11 @@ export async function recordImport(data, event) {
   const key = `users/${(rec.login || rec.full || 'anon').replace(/[^\w.@-]+/g, '_')}`
   try {
     const prev = (await s.get(key, { type: 'json' })) || null
+    // Пустое значение не должно затирать то, что уже узнали о студенте.
+    const merged = { ...rec }
+    if (prev) for (const [k, v] of Object.entries(prev)) if (!merged[k] && v) merged[k] = v
     await s.setJSON(key, {
-      ...rec,
+      ...merged,
       first: prev?.first || ts,
       last: ts,
       imports: (prev?.imports || 0) + 1,
@@ -131,6 +141,30 @@ export async function readAll(event, extraStores = []) {
 
   events.sort((a, b) => String(b.ts).localeCompare(String(a.ts)))
   return { events, users, stores, scanned: [...names] }
+}
+
+// Служебные слепки (например, подписи полей на странице LMS).
+export async function saveDiag(name, value, event) {
+  await blobs(event)
+  const s = await store()
+  if (!s) return false
+  try {
+    await s.setJSON(`diag/${name}`, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function readDiag(name, event) {
+  await blobs(event)
+  const s = await store()
+  if (!s) return null
+  try {
+    return await s.get(`diag/${name}`, { type: 'json' })
+  } catch {
+    return null
+  }
 }
 
 // Диагностика: проверяем, что запись в Blobs вообще работает.

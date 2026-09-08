@@ -7,151 +7,315 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>GPA · статистика</title>
     <style>
+      /* Палитра и типографика — те же, что в калькуляторе (src/styles.css). */
       :root {
-        --bg: #0f1216;
-        --card: #171b21;
-        --line: #262c35;
-        --txt: #e8ecf1;
-        --dim: #96a0ad;
-        --acc: #4f9cf9;
-        --ok: #35c07f;
+        --bg: #eef3f8;
+        --surface: #ffffff;
+        --ink: #0c1225;
+        --ink-soft: #5b6b7d;
+        --line: #dbe4ec;
+        --field: #f1f6fa;
+        --primary: #3577d4;
+        --primary-2: #5a9ae6;
+        --primary-deep: #2a63bb;
+        --green: #28a745;
+        --sans: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       }
       * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
       body {
-        margin: 0;
         background: var(--bg);
-        color: var(--txt);
-        font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
       }
-      .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 18px 60px; }
-      h1 { font-size: 20px; margin: 0; }
-      .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
-      .sp { flex: 1; }
-      button, input {
+      .page { max-width: 1240px; margin: 0 auto; padding: 30px 24px 48px; }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 22px;
+        flex-wrap: wrap;
+      }
+      .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+      .brand-logo { width: 42px; height: 42px; object-fit: contain; flex: none; }
+      .brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+      .brand-name {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        background: linear-gradient(120deg, var(--primary), var(--primary-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .brand-tag { font-size: 12.5px; color: var(--ink-soft); }
+      .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+      button, input, select {
         font: inherit;
-        color: var(--txt);
-        background: var(--card);
+        color: var(--ink);
+        background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 9px 13px;
+        border-radius: 11px;
+        padding: 9px 14px;
       }
-      button { cursor: pointer; }
-      button:hover { border-color: var(--acc); }
-      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-      .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-      .card b { display: block; font-size: 28px; line-height: 1.2; }
-      .card span { color: var(--dim); font-size: 13px; }
-      .sect { margin-top: 26px; }
-      .sect h2 { font-size: 15px; color: var(--dim); font-weight: 600; margin: 0 0 10px; }
-      .chart { display: flex; align-items: flex-end; gap: 4px; height: 130px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; overflow-x: auto; }
-      .bar { flex: 1 0 14px; background: linear-gradient(180deg, var(--acc), #2b6fc4); border-radius: 4px 4px 0 0; min-height: 3px; }
-      .tbl-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+      button { cursor: pointer; font-weight: 600; font-size: 14px; }
+      button:hover { border-color: var(--primary); color: var(--primary-deep); }
+      .btn-accent {
+        background: linear-gradient(120deg, var(--primary), var(--primary-2));
+        border-color: transparent;
+        color: #fff;
+        box-shadow: 0 10px 22px rgba(53, 119, 212, 0.25);
+      }
+      .btn-accent:hover { color: #fff; filter: brightness(1.04); }
+      input:focus, select:focus { outline: 2px solid rgba(53, 119, 212, 0.35); outline-offset: 1px; }
+
+      .tools {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px 16px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .tools input[type='search'] { flex: 1 1 240px; background: var(--field); }
+      .tools select { background: var(--field); max-width: 220px; }
+      .count { margin-left: auto; color: var(--ink-soft); font-size: 13.5px; white-space: nowrap; }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+      }
+      .scroll { overflow-x: auto; }
       table { border-collapse: collapse; width: 100%; font-size: 14px; }
-      th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-      th { color: var(--dim); font-weight: 600; position: sticky; top: 0; background: var(--card); }
-      tr:last-child td { border-bottom: 0; }
-      .gpa { color: var(--ok); font-weight: 600; }
-      .msg { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; color: var(--dim); }
-      .gate { max-width: 380px; margin: 12vh auto; text-align: center; }
-      .gate input { width: 100%; margin: 14px 0; text-align: center; letter-spacing: .06em; }
-      .gate button { width: 100%; background: var(--acc); border-color: var(--acc); color: #06101d; font-weight: 600; }
-      .err { color: #ff8484; font-size: 14px; min-height: 20px; }
-      .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; color: var(--dim); }
+      th, td { text-align: left; padding: 12px 14px; white-space: nowrap; }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--surface);
+        border-bottom: 2px solid var(--primary);
+        font-size: 11.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--ink-soft);
+        cursor: pointer;
+        user-select: none;
+      }
+      thead th:hover { color: var(--primary-deep); }
+      .arrow { display: inline-block; margin-left: 6px; font-size: 10px; opacity: 0.35; }
+      th.sorted .arrow { opacity: 1; color: var(--primary); }
+      tbody tr { border-top: 1px solid var(--line); }
+      tbody tr:hover { background: var(--field); }
+      td.dim { color: var(--ink-soft); }
+      .gpa { font-weight: 700; color: var(--green); }
+      .mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 13px; }
+      .empty { padding: 28px; text-align: center; color: var(--ink-soft); }
+
+      .gate {
+        max-width: 380px;
+        margin: 14vh auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 26px 24px;
+        text-align: center;
+      }
+      .gate h1 { font-size: 19px; margin: 0 0 6px; }
+      .gate p { margin: 0 0 16px; color: var(--ink-soft); font-size: 13.5px; }
+      .gate input { width: 100%; background: var(--field); text-align: center; letter-spacing: 0.08em; }
+      .gate button { width: 100%; margin-top: 14px; }
+      .err { color: #dc3545; font-size: 13.5px; min-height: 20px; margin-top: 10px; }
     </style>
   </head>
   <body>
-    <div class="wrap" id="app"></div>
+    <div class="page" id="app"></div>
     <script>
       const API = '/api/s-165b0620afce'
       const KEY_STORE = 'gpa-stats-key'
       const app = document.getElementById('app')
-      const esc = (s) => String(s == null ? '' : s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c])
+
+      const esc = (s) =>
+        String(s == null ? '' : s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c])
       const dt = (s) => (s ? new Date(s).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—')
+
+      // Колонки таблицы: ключ данных, заголовок, как показывать и как сортировать.
+      const COLS = [
+        { key: 'full', title: 'ФИО' },
+        { key: 'login', title: 'Логин', cls: 'mono dim' },
+        { key: 'group', title: 'Группа' },
+        { key: 'specialty', title: 'Направление' },
+        { key: 'course', title: 'Курс', num: true },
+        { key: 'gender', title: 'Пол' },
+        { key: 'birth', title: 'Дата рождения', cls: 'dim' },
+        { key: 'curator', title: 'Куратор' },
+        { key: 'eduType', title: 'Тип обучения' },
+        { key: 'eduLang', title: 'Язык обучения' },
+        { key: 'gpa', title: 'GPA', num: true, cls: 'gpa', fmt: (v) => (v ? Number(v).toFixed(2) : '—') },
+        { key: 'imports', title: 'Импортов', num: true, cls: 'dim' },
+        { key: 'last', title: 'Последний визит', cls: 'dim', fmt: dt },
+      ]
+
+      const FILTERS = [
+        { key: 'specialty', label: 'Направление' },
+        { key: 'course', label: 'Курс' },
+        { key: 'gender', label: 'Пол' },
+        { key: 'eduType', label: 'Тип обучения' },
+        { key: 'eduLang', label: 'Язык обучения' },
+      ]
+
+      let rows = []
+      let key = ''
+      const state = { q: '', sort: 'last', dir: 'desc', filters: {} }
 
       function gate(err) {
         app.innerHTML =
-          '<div class="gate"><h1>Статистика</h1>' +
+          '<div class="gate"><h1>Статистика</h1><p>Страница закрыта ключом доступа</p>' +
           '<input id="k" type="password" placeholder="ключ доступа" autofocus />' +
-          '<div class="err">' + esc(err || '') + '</div>' +
-          '<button id="go">Открыть</button></div>'
+          '<button class="btn-accent" id="go">Открыть</button>' +
+          '<div class="err">' + esc(err || '') + '</div></div>'
         const go = () => load(document.getElementById('k').value.trim())
         document.getElementById('go').onclick = go
         document.getElementById('k').onkeydown = (e) => { if (e.key === 'Enter') go() }
       }
 
-      async function load(key) {
-        if (!key) return gate('Введите ключ')
-        app.innerHTML = '<div class="msg">Загрузка…</div>'
+      async function load(k) {
+        if (!k) return gate('Введите ключ')
+        app.innerHTML = '<div class="panel"><div class="empty">Загрузка…</div></div>'
         let res, data
         try {
-          res = await fetch(API, { headers: { 'x-access-key': key } })
+          res = await fetch(API, { headers: { 'x-access-key': k } })
           data = await res.json()
-        } catch (e) {
-          localStorage.removeItem(KEY_STORE)
+        } catch {
           return gate('Сервер недоступен')
         }
         if (res.status === 401) {
           localStorage.removeItem(KEY_STORE)
           return gate('Неверный ключ')
         }
-        if (!res.ok) return gate(data.error || 'Ошибка ' + res.status)
-        localStorage.setItem(KEY_STORE, key)
-        render(data, key)
+        if (!res.ok) return gate((data && data.error) || 'Ошибка ' + res.status)
+        localStorage.setItem(KEY_STORE, k)
+        key = k
+        rows = data.students || []
+        render()
       }
 
-      function render(d, key) {
-        const t = d.totals || {}
-        const max = Math.max(1, ...(d.daily || []).map((x) => x.count))
-        const bars = (d.daily || [])
-          .slice(-60)
-          .map((x) => '<div class="bar" style="height:' + Math.round((x.count / max) * 100) + '%" title="' + x.date + ': ' + x.count + '"></div>')
-          .join('')
-        const rows = (d.users || [])
+      const values = (field) =>
+        [...new Set(rows.map((r) => (r[field] || '').trim()).filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b, 'ru', { numeric: true }),
+        )
+
+      function visible() {
+        const q = state.q.trim().toLowerCase()
+        let out = rows.filter((r) => {
+          for (const f of FILTERS) {
+            const want = state.filters[f.key]
+            if (want && (r[f.key] || '').trim() !== want) return false
+          }
+          if (!q) return true
+          return COLS.some((c) => String(r[c.key] || '').toLowerCase().includes(q))
+        })
+        const col = COLS.find((c) => c.key === state.sort) || {}
+        const sign = state.dir === 'asc' ? 1 : -1
+        out = out.slice().sort((a, b) => {
+          const x = a[state.sort]
+          const y = b[state.sort]
+          if (col.num) return sign * ((parseFloat(x) || 0) - (parseFloat(y) || 0))
+          return sign * String(x || '').localeCompare(String(y || ''), 'ru', { numeric: true })
+        })
+        return out
+      }
+
+      function render() {
+        const list = visible()
+        const head = COLS.map((c) => {
+          const on = state.sort === c.key
+          const arrow = on ? (state.dir === 'asc' ? '▲' : '▼') : '▼'
+          return '<th class="' + (on ? 'sorted' : '') + '" data-sort="' + c.key + '">' +
+            esc(c.title) + '<span class="arrow">' + arrow + '</span></th>'
+        }).join('')
+
+        const body = list
           .map(
-            (u) =>
-              '<tr><td>' + esc(u.full || u.name || '—') +
-              '</td><td class="mono">' + esc(u.login || '—') +
-              '</td><td>' + esc(u.group || '—') +
-              '</td><td class="gpa">' + (u.gpa ? u.gpa.toFixed ? u.gpa.toFixed(2) : u.gpa : '—') +
-              '</td><td>' + (u.credits ?? '—') +
-              '</td><td>' + (u.subjects ?? '—') +
-              '</td><td>' + (u.imports || 1) +
-              '</td><td>' + dt(u.first) +
-              '</td><td>' + dt(u.last) + '</td></tr>',
+            (r) =>
+              '<tr>' +
+              COLS.map((c) => {
+                const val = c.fmt ? c.fmt(r[c.key]) : r[c.key]
+                return '<td class="' + (c.cls || '') + '">' + esc(val || '—') + '</td>'
+              }).join('') +
+              '</tr>',
           )
           .join('')
 
-        app.innerHTML =
-          '<div class="head"><h1>GPA Calculator · статистика</h1><div class="sp"></div>' +
-          '<button id="csv">CSV</button><button id="reload">Обновить</button><button id="out">Выйти</button></div>' +
-          '<div class="cards">' +
-          '<div class="card"><b>' + (t.imports || 0) + '</b><span>импортов всего</span></div>' +
-          '<div class="card"><b>' + (t.students || 0) + '</b><span>студентов</span></div>' +
-          '<div class="card"><b>' + (t.avgGpa || 0) + '</b><span>средний GPA</span></div>' +
-          '<div class="card"><b>' + (t.today || 0) + '</b><span>сегодня</span></div>' +
-          '</div>' +
-          '<div class="sect"><h2>Импорты по дням</h2><div class="chart">' + (bars || '<span class="msg">нет данных</span>') + '</div></div>' +
-          '<div class="sect"><h2>Студенты</h2>' +
-          (rows
-            ? '<div class="tbl-wrap"><table><thead><tr><th>ФИО</th><th>Логин</th><th>Группа</th><th>GPA</th><th>Кредиты</th><th>Предметы</th><th>Импортов</th><th>Первый</th><th>Последний</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-            : '<div class="msg">Пока никто не импортировал оценки.</div>') +
-          '</div>' +
-          (d.stores && d.stores.length
-            ? '<div class="sect"><h2>Хранилища</h2><div class="msg mono">' +
-              d.stores.map((s) => esc(s.name) + ': events ' + s.events + ', users ' + s.users + (s.other ? ', other ' + s.other : '')).join('<br>') +
-              '</div></div>'
-            : '') +
-          (d.error ? '<div class="sect"><div class="msg">Хранилище недоступно: ' + esc(d.error) + '</div></div>' : '')
+        const filters = FILTERS.map((f) => {
+          const opts = values(f.key)
+            .map((v) => '<option value="' + esc(v) + '"' + (state.filters[f.key] === v ? ' selected' : '') + '>' + esc(v) + '</option>')
+            .join('')
+          return '<select data-filter="' + f.key + '"><option value="">' + esc(f.label) + ': все</option>' + opts + '</select>'
+        }).join('')
 
+        app.innerHTML =
+          '<div class="topbar"><div class="brand">' +
+          '<img src="/logo.png" alt="" class="brand-logo" />' +
+          '<div class="brand-text"><span class="brand-name">GPA Calculator</span>' +
+          '<span class="brand-tag">статистика импортов</span></div></div>' +
+          '<div class="top-actions"><button id="csv">CSV</button>' +
+          '<button id="reload">Обновить</button><button id="out">Выйти</button></div></div>' +
+          '<div class="tools">' +
+          '<input type="search" id="q" placeholder="Поиск по ФИО, логину, группе…" value="' + esc(state.q) + '" />' +
+          filters +
+          '<span class="count">' + list.length + ' из ' + rows.length + '</span></div>' +
+          '<div class="panel"><div class="scroll">' +
+          (rows.length
+            ? '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>'
+            : '<div class="empty">Пока никто не импортировал оценки.</div>') +
+          (rows.length && !list.length ? '<div class="empty">Ничего не найдено.</div>' : '') +
+          '</div></div>'
+
+        const q = document.getElementById('q')
+        q.oninput = () => {
+          state.q = q.value
+          render()
+          const el = document.getElementById('q')
+          el.focus()
+          el.setSelectionRange(el.value.length, el.value.length)
+        }
+        app.querySelectorAll('[data-filter]').forEach((sel) => {
+          sel.onchange = () => {
+            state.filters[sel.dataset.filter] = sel.value
+            render()
+          }
+        })
+        app.querySelectorAll('[data-sort]').forEach((th) => {
+          th.onclick = () => {
+            const k = th.dataset.sort
+            if (state.sort === k) state.dir = state.dir === 'asc' ? 'desc' : 'asc'
+            else {
+              state.sort = k
+              state.dir = 'asc'
+            }
+            render()
+          }
+        })
         document.getElementById('reload').onclick = () => load(key)
-        document.getElementById('out').onclick = () => { localStorage.removeItem(KEY_STORE); gate('') }
+        document.getElementById('out').onclick = () => {
+          localStorage.removeItem(KEY_STORE)
+          gate('')
+        }
         document.getElementById('csv').onclick = () => {
-          const head = ['full', 'login', 'group', 'gpa', 'credits', 'subjects', 'imports', 'first', 'last']
-          const csv = [head.join(',')]
-            .concat((d.users || []).map((u) => head.map((k) => JSON.stringify(u[k] ?? '')).join(',')))
+          const csv = [COLS.map((c) => c.title).join(',')]
+            .concat(list.map((r) => COLS.map((c) => JSON.stringify(r[c.key] ?? '')).join(',')))
             .join('\n')
           const a = document.createElement('a')
-          a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+          a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }))
           a.download = 'gpa-stats.csv'
           a.click()
         }
