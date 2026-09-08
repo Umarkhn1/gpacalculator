@@ -188,6 +188,9 @@ async function login(cookies, loginId, password) {
 }
 
 // Средний балл: сумма (балл × кредит) по всем предметам / сумма их кредитов.
+// Двойка идёт нулём баллов, но её кредиты остаются в знаменателе.
+const points5 = (grade) => (grade >= 3 ? grade : 0)
+
 function gpaOf(semesters) {
   let credits = 0
   let points = 0
@@ -196,7 +199,7 @@ function gpaOf(semesters) {
     for (const c of s.courses) {
       if (!c.grade) continue
       credits += c.credit
-      points += c.credit * c.grade
+      points += c.credit * points5(c.grade)
       subjects += 1
     }
   }

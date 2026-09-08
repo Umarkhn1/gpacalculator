@@ -3,13 +3,16 @@ import { useEffect, useState } from 'react'
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
 
 // Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
+// Двойка засчитывается нулём баллов, но её кредиты остаются в знаменателе.
+const points5 = (grade) => (grade >= 3 ? grade : 0)
+
 function gpaOf(list) {
   let cr = 0
   let pts = 0
   for (const c of list) {
     if (c.grade) {
       cr += c.credit
-      pts += c.credit * c.grade
+      pts += c.credit * points5(c.grade)
     }
   }
   return cr ? pts / cr : 0

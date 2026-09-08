@@ -9,6 +9,9 @@ const SESSION_KEY = 'tuit-gpa-session'
 const STUDENT_KEY = 'tuit-gpa-student'
 const GRADES = [5, 4, 3, 2]
 
+// Двойка — незачёт: в сумму баллов идёт нулём, но её кредиты в знаменателе остаются.
+export const points5 = (grade) => (grade >= 3 ? grade : 0)
+
 // Декоративные мягкие блобы на фоне карточки балла (спокойное свечение).
 const BLOBS = [
   { left: '-10%', top: '-15%', size: 150, delay: 0, dur: 18 },
@@ -82,7 +85,7 @@ export default function App() {
       const gr = parseFloat(c.grade)
       if (!Number.isNaN(cr) && cr > 0 && !Number.isNaN(gr)) {
         credits += cr
-        points += cr * gr
+        points += cr * points5(gr)
         counted += 1
       }
     }
