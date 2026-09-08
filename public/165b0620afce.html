@@ -107,9 +107,10 @@
       }
       .scroll { overflow-x: auto; }
       table { border-collapse: collapse; width: 100%; font-size: 14px; }
-      th, td { text-align: left; padding: 12px 14px; white-space: nowrap; vertical-align: top; }
-      /* Длинные поля переносим, чтобы таблица помещалась по ширине. */
-      td.wrap, th.wrap { white-space: normal; word-break: break-word; min-width: 140px; max-width: 260px; }
+      /* Ячейки переносятся, короткие колонки — нет: так таблица влезает без прокрутки. */
+      th, td { text-align: left; padding: 11px 8px; vertical-align: top; overflow-wrap: anywhere; }
+      td.nowrap, th.nowrap { white-space: nowrap; }
+      td.wrap, th.wrap { max-width: 240px; }
       thead th {
         position: sticky;
         top: 0;
@@ -163,17 +164,17 @@
       // Колонки таблицы: ключ данных, заголовок, как показывать и как сортировать.
       const COLS = [
         { key: 'full', title: 'ФИО', cls: 'wrap' },
-        { key: 'login', title: 'Логин', cls: 'mono dim' },
+        { key: 'login', title: 'Логин', cls: 'mono dim nowrap' },
         { key: 'group', title: 'Группа' },
         { key: 'specialty', title: 'Направление', cls: 'wrap' },
-        { key: 'course', title: 'Курс', num: true },
-        { key: 'gender', title: 'Пол' },
-        { key: 'birth', title: 'Дата рождения', cls: 'dim' },
+        { key: 'course', title: 'Курс', num: true, cls: 'nowrap' },
+        { key: 'gender', title: 'Пол', cls: 'nowrap' },
+        { key: 'birth', title: 'Дата рождения', cls: 'dim nowrap' },
         { key: 'curator', title: 'Куратор', cls: 'wrap' },
         { key: 'eduType', title: 'Тип обучения' },
         { key: 'eduLang', title: 'Язык обучения' },
-        { key: 'gpa', title: 'GPA', num: true, cls: 'gpa', fmt: (v) => (v ? Number(v).toFixed(2) : '—') },
-        { key: 'imports', title: 'Импортов', num: true, cls: 'dim' },
+        { key: 'gpa', title: 'GPA', num: true, cls: 'gpa nowrap', fmt: (v) => (v ? Number(v).toFixed(2) : '—') },
+        { key: 'imports', title: 'Импортов', num: true, cls: 'dim nowrap' },
         { key: 'last', title: 'Последний визит', cls: 'dim', fmt: dt },
       ]
 
@@ -252,7 +253,7 @@
         const head = COLS.map((c) => {
           const on = state.sort === c.key
           const arrow = on ? (state.dir === 'asc' ? '▲' : '▼') : '▼'
-          return '<th class="' + (on ? 'sorted' : '') + '" data-sort="' + c.key + '">' +
+          return '<th class="' + (on ? 'sorted ' : '') + (c.cls || '').replace(/mono|dim|gpa/g, '').trim() + '" data-sort="' + c.key + '">' +
             esc(c.title) + '<span class="arrow">' + arrow + '</span></th>'
         }).join('')
 
