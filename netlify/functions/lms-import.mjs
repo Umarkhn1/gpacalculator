@@ -263,7 +263,7 @@ export const handler = async (event) => {
       ip: headers['x-nf-client-connection-ip'] || headers['client-ip'] || '',
       ua: headers['user-agent'] || '',
       lang: (headers['accept-language'] || '').split(',')[0] || '',
-    })
+    }, event)
 
     return json(200, { semesters, student, session: cookieHeader(cookies) })
   } catch (e) {

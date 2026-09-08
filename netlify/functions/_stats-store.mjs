@@ -8,9 +8,17 @@ const STORE = 'gpa-stats'
 // Читаем из всех, чтобы старые записи снова оказались на странице.
 const LEGACY_STORES = ['stats', 'gpa', 'gpa-calculator', 'imports', 'visits', 'users']
 
-async function blobs() {
+let cached = null
+
+async function blobs(event) {
   try {
-    return await import('@netlify/blobs')
+    if (!cached) cached = await import('@netlify/blobs')
+    if (event && cached.connectLambda) {
+      try {
+        cached.connectLambda(event)
+      } catch {}
+    }
+    return cached
   } catch {
     return null
   }
@@ -33,11 +41,12 @@ async function store(name = STORE) {
 const rid = () => Math.random().toString(36).slice(2, 8)
 
 // Одна запись события + сводка по студенту (чтобы считать уникальных).
-export async function recordImport(data) {
+export async function recordImport(data, event) {
+  await blobs(event)
   const s = await store()
   if (!s) return false
   const ts = new Date().toISOString()
-  const event = {
+  const rec = {
     ts,
     login: data.login || '',
     name: data.student?.name || '',
@@ -54,17 +63,17 @@ export async function recordImport(data) {
     lang: data.lang || '',
   }
   try {
-    await s.setJSON(`events/${ts}-${rid()}`, event)
+    await s.setJSON(`events/${ts}-${rid()}`, rec)
   } catch (e) {
     console.error('stats: event write failed', e?.message)
     return false
   }
   // Сводка по студенту: первый визит, последний, число импортов.
-  const key = `users/${(event.login || event.full || 'anon').replace(/[^\w.@-]+/g, '_')}`
+  const key = `users/${(rec.login || rec.full || 'anon').replace(/[^\w.@-]+/g, '_')}`
   try {
     const prev = (await s.get(key, { type: 'json' })) || null
     await s.setJSON(key, {
-      ...event,
+      ...rec,
       first: prev?.first || ts,
       last: ts,
       imports: (prev?.imports || 0) + 1,
@@ -90,8 +99,8 @@ async function listAll(s, prefix) {
 }
 
 // Всё, что удалось найти: текущее хранилище + все прочие на сайте.
-export async function readAll() {
-  const mod = await blobs()
+export async function readAll(event) {
+  const mod = await blobs(event)
   if (!mod) return { error: 'blobs-unavailable', events: [], users: [], stores: [] }
 
   const names = new Set([STORE, ...LEGACY_STORES])

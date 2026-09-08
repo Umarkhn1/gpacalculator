@@ -103,7 +103,7 @@ function aggregate(events, users) {
 export const handler = async (event) => {
   if (keyFrom(event) !== KEY) return json(401, { error: 'Нужен ключ доступа' })
 
-  const { events = [], users = [], stores = [], error } = await readAll()
+  const { events = [], users = [], stores = [], error } = await readAll(event)
   const agg = aggregate(events, users)
   const url = new URL(event.rawUrl || 'https://x/', 'https://x/')
   const raw = url.searchParams.get('raw') === '1'
