@@ -95,17 +95,19 @@
         overflow: hidden;
       }
       .scroll { overflow-x: auto; }
-      table { border-collapse: collapse; width: 100%; font-size: 14px; }
-      th, td { text-align: left; padding: 12px 14px; white-space: nowrap; }
+      table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+      th, td { text-align: left; padding: 8px 9px; white-space: nowrap; vertical-align: top; }
+      /* Длинные поля переносим, чтобы таблица помещалась по ширине. */
+      td.wrap, th.wrap { white-space: normal; word-break: break-word; min-width: 120px; max-width: 190px; }
       thead th {
         position: sticky;
         top: 0;
         background: var(--surface);
         border-bottom: 2px solid var(--primary);
-        font-size: 11.5px;
+        font-size: 10.5px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.02em;
         color: var(--ink-soft);
         cursor: pointer;
         user-select: none;
@@ -117,7 +119,7 @@
       tbody tr:hover { background: var(--field); }
       td.dim { color: var(--ink-soft); }
       .gpa { font-weight: 700; color: var(--green); }
-      .mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 13px; }
+      .mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 12px; }
       .empty { padding: 28px; text-align: center; color: var(--ink-soft); }
 
       .gate {
@@ -149,14 +151,14 @@
 
       // Колонки таблицы: ключ данных, заголовок, как показывать и как сортировать.
       const COLS = [
-        { key: 'full', title: 'ФИО' },
+        { key: 'full', title: 'ФИО', cls: 'wrap' },
         { key: 'login', title: 'Логин', cls: 'mono dim' },
         { key: 'group', title: 'Группа' },
-        { key: 'specialty', title: 'Направление' },
+        { key: 'specialty', title: 'Направление', cls: 'wrap' },
         { key: 'course', title: 'Курс', num: true },
         { key: 'gender', title: 'Пол' },
         { key: 'birth', title: 'Дата рождения', cls: 'dim' },
-        { key: 'curator', title: 'Куратор' },
+        { key: 'curator', title: 'Куратор', cls: 'wrap' },
         { key: 'eduType', title: 'Тип обучения' },
         { key: 'eduLang', title: 'Язык обучения' },
         { key: 'gpa', title: 'GPA', num: true, cls: 'gpa', fmt: (v) => (v ? Number(v).toFixed(2) : '—') },
@@ -164,17 +166,20 @@
         { key: 'last', title: 'Последний визит', cls: 'dim', fmt: dt },
       ]
 
+      // Фильтр каскадом: сначала поле, потом одно из значений, которые в нём встречаются.
       const FILTERS = [
         { key: 'specialty', label: 'Направление' },
         { key: 'course', label: 'Курс' },
         { key: 'gender', label: 'Пол' },
         { key: 'eduType', label: 'Тип обучения' },
         { key: 'eduLang', label: 'Язык обучения' },
+        { key: 'group', label: 'Группа' },
+        { key: 'curator', label: 'Куратор' },
       ]
 
       let rows = []
       let key = ''
-      const state = { q: '', sort: 'last', dir: 'desc', filters: {} }
+      const state = { q: '', sort: 'last', dir: 'desc', field: '', value: '' }
 
       function gate(err) {
         app.innerHTML =
@@ -216,10 +221,7 @@
       function visible() {
         const q = state.q.trim().toLowerCase()
         let out = rows.filter((r) => {
-          for (const f of FILTERS) {
-            const want = state.filters[f.key]
-            if (want && (r[f.key] || '').trim() !== want) return false
-          }
+          if (state.field && state.value && (r[state.field] || '').trim() !== state.value) return false
           if (!q) return true
           return COLS.some((c) => String(r[c.key] || '').toLowerCase().includes(q))
         })
@@ -255,12 +257,18 @@
           )
           .join('')
 
-        const filters = FILTERS.map((f) => {
-          const opts = values(f.key)
-            .map((v) => '<option value="' + esc(v) + '"' + (state.filters[f.key] === v ? ' selected' : '') + '>' + esc(v) + '</option>')
-            .join('')
-          return '<select data-filter="' + f.key + '"><option value="">' + esc(f.label) + ': все</option>' + opts + '</select>'
-        }).join('')
+        const fieldOpts = FILTERS.map(
+          (f) => '<option value="' + f.key + '"' + (state.field === f.key ? ' selected' : '') + '>' + esc(f.label) + '</option>',
+        ).join('')
+        const valueOpts = state.field
+          ? values(state.field)
+              .map((v) => '<option value="' + esc(v) + '"' + (state.value === v ? ' selected' : '') + '>' + esc(v) + '</option>')
+              .join('')
+          : ''
+        const filters =
+          '<select id="field"><option value="">Фильтр: поле</option>' + fieldOpts + '</select>' +
+          '<select id="value"' + (state.field ? '' : ' disabled') + '><option value="">' +
+          (state.field ? 'все значения' : '—') + '</option>' + valueOpts + '</select>'
 
         app.innerHTML =
           '<div class="topbar"><div class="brand">' +
@@ -288,12 +296,15 @@
           el.focus()
           el.setSelectionRange(el.value.length, el.value.length)
         }
-        app.querySelectorAll('[data-filter]').forEach((sel) => {
-          sel.onchange = () => {
-            state.filters[sel.dataset.filter] = sel.value
-            render()
-          }
-        })
+        document.getElementById('field').onchange = (e) => {
+          state.field = e.target.value
+          state.value = ''
+          render()
+        }
+        document.getElementById('value').onchange = (e) => {
+          state.value = e.target.value
+          render()
+        }
         app.querySelectorAll('[data-sort]').forEach((th) => {
           th.onclick = () => {
             const k = th.dataset.sort

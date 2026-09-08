@@ -73,7 +73,14 @@ export async function recordImport(data, event) {
     return false
   }
   // Сводка по студенту: первый визит, последний, число импортов.
-  const key = `users/${(rec.login || rec.full || 'anon').replace(/[^\w.@-]+/g, '_')}`
+  // Ключ сводки — по ФИО: логин известен не всегда (импорт по сохранённой сессии),
+  // а один студент должен оставаться одной строкой.
+  const ident = (rec.full || rec.login || 'anon')
+    .replace(/[`´ʻʼ‘’']/g, "'")
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+  const key = `users/${ident.replace(/[^\wа-яё.@'-]+/gi, '_')}`
   try {
     const prev = (await s.get(key, { type: 'json' })) || null
     // Пустое значение не должно затирать то, что уже узнали о студенте.

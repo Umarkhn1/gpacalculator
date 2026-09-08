@@ -50,6 +50,14 @@ const pick = (src) => {
   return out
 }
 
+// Один студент — одна строка. Опознаём по ФИО (логина при импорте по сессии нет).
+const identity = (r) =>
+  String(r.full || r.login || r.name || '')
+    .replace(/[`´ʻʼ‘’']/g, "'")
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+
 // Одна строка на студента: последние известные данные + счётчик импортов.
 function students(events, users) {
   const byId = new Map()
@@ -59,15 +67,18 @@ function students(events, users) {
       byId.set(id, row)
       return
     }
-    // Пустые значения не затирают уже известные.
-    for (const f of FIELDS) if (!cur[f] && row[f]) cur[f] = row[f]
+    // Свежая запись обновляет поля, старая — только дополняет пустые.
+    const fresher = String(row.last || '') > String(cur.last || '')
+    for (const f of FIELDS) {
+      if (row[f] && (fresher || !cur[f])) cur[f] = row[f]
+    }
     cur.imports += row.imports
     if (row.first && (!cur.first || row.first < cur.first)) cur.first = row.first
     if (row.last && (!cur.last || row.last > cur.last)) cur.last = row.last
   }
 
   for (const u of users) {
-    const id = u.login || u.full || u.name
+    const id = identity(u)
     if (!id) continue
     put(id, {
       id,
@@ -80,7 +91,7 @@ function students(events, users) {
   // События нужны, если сводки по студенту нет (записи прошлых версий).
   if (!users.length) {
     for (const e of events) {
-      const id = e.login || e.full || e.name
+      const id = identity(e)
       if (!id) continue
       put(id, { id, ...pick(e), first: e.ts, last: e.ts, imports: 1 })
     }
