@@ -96,11 +96,11 @@ async function listAll(s, prefix) {
 }
 
 // Всё, что удалось найти: текущее хранилище + все прочие на сайте.
-export async function readAll(event) {
+export async function readAll(event, extraStores = []) {
   const mod = await blobs(event)
   if (!mod) return { error: 'blobs-unavailable', events: [], users: [], stores: [] }
 
-  const names = new Set([STORE, ...LEGACY_STORES])
+  const names = new Set([STORE, ...LEGACY_STORES, ...extraStores.filter(Boolean)])
   try {
     if (typeof mod.listStores === 'function') {
       const res = await mod.listStores()

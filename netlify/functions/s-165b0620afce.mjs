@@ -106,14 +106,14 @@ export const handler = async (event) => {
   const url0 = new URL(event.rawUrl || 'https://x/', 'https://x/')
   if (url0.searchParams.get('diag') === '1') {
     const probe = await selfTest(event)
-    const scan = await readAll(event)
+    const scan = await readAll(event, (url0.searchParams.get('store') || '').split(',')) 
     return json(200, { diag: probe, scanned: scan.scanned || [], stores: scan.stores || [] })
   }
 
-  const { events = [], users = [], stores = [], error } = await readAll(event)
+  const extra = (url0.searchParams.get('store') || '').split(',')
+  const { events = [], users = [], stores = [], error } = await readAll(event, extra)
   const agg = aggregate(events, users)
-  const url = new URL(event.rawUrl || 'https://x/', 'https://x/')
-  const raw = url.searchParams.get('raw') === '1'
+  const raw = url0.searchParams.get('raw') === '1'
 
   return json(200, {
     ok: true,
