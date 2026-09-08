@@ -52,7 +52,17 @@
         -webkit-text-fill-color: transparent;
       }
       .brand-tag { font-size: 12.5px; color: var(--ink-soft); }
-      .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .top-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        color: var(--ink-soft);
+      }
+      .icon-btn:hover { color: var(--primary-deep); }
 
       button, input, select {
         font: inherit;
@@ -275,8 +285,13 @@
           '<img src="/logo.png" alt="" class="brand-logo" />' +
           '<div class="brand-text"><span class="brand-name">GPA Calculator</span>' +
           '<span class="brand-tag">статистика импортов</span></div></div>' +
-          '<div class="top-actions"><button id="csv">CSV</button>' +
-          '<button id="reload">Обновить</button><button id="out">Выйти</button></div></div>' +
+          '<div class="top-actions">' +
+          '<button class="icon-btn" id="reload" title="Обновить" aria-label="Обновить">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />' +
+          '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />' +
+          '</svg></button>' +
+          '<button id="out">Выйти</button></div></div>' +
           '<div class="tools">' +
           '<input type="search" id="q" placeholder="Поиск по ФИО, логину, группе…" value="' + esc(state.q) + '" />' +
           filters +
@@ -320,15 +335,6 @@
         document.getElementById('out').onclick = () => {
           localStorage.removeItem(KEY_STORE)
           gate('')
-        }
-        document.getElementById('csv').onclick = () => {
-          const csv = [COLS.map((c) => c.title).join(',')]
-            .concat(list.map((r) => COLS.map((c) => JSON.stringify(r[c.key] ?? '')).join(',')))
-            .join('\n')
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }))
-          a.download = 'gpa-stats.csv'
-          a.click()
         }
       }
 
