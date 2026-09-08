@@ -108,24 +108,24 @@
       .scroll { overflow-x: auto; }
       table { border-collapse: collapse; width: 100%; font-size: 14px; }
       /* Ячейки переносятся, короткие колонки — нет: так таблица влезает без прокрутки. */
-      th, td { text-align: left; padding: 11px 8px; vertical-align: top; overflow-wrap: anywhere; }
+      th, td { text-align: left; padding: 9px 6px; vertical-align: top; overflow-wrap: anywhere; }
       td.nowrap, th.nowrap { white-space: nowrap; }
-      td.wrap, th.wrap { max-width: 240px; }
+      td.wrap, th.wrap { max-width: 180px; }
       thead th {
         position: sticky;
         top: 0;
         background: var(--surface);
         border-bottom: 2px solid var(--primary);
-        font-size: 11.5px;
+        font-size: 10.5px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0;
         color: var(--ink-soft);
         cursor: pointer;
         user-select: none;
       }
       thead th:hover { color: var(--primary-deep); }
-      .arrow { display: inline-block; margin-left: 6px; font-size: 10px; opacity: 0.35; }
+      .arrow { display: inline-block; margin-left: 3px; font-size: 9px; opacity: 0.35; }
       th.sorted .arrow { opacity: 1; color: var(--primary); }
       tbody tr { border-top: 1px solid var(--line); }
       tbody tr:hover { background: var(--field); }
@@ -169,13 +169,13 @@
         { key: 'specialty', title: 'Направление', cls: 'wrap' },
         { key: 'course', title: 'Курс', num: true, cls: 'nowrap' },
         { key: 'gender', title: 'Пол', cls: 'nowrap' },
-        { key: 'birth', title: 'Дата рождения', cls: 'dim nowrap' },
+        { key: 'birth', title: 'Рождение', cls: 'dim nowrap' },
         { key: 'curator', title: 'Куратор', cls: 'wrap' },
-        { key: 'eduType', title: 'Тип обучения' },
-        { key: 'eduLang', title: 'Язык обучения' },
+        { key: 'eduType', title: 'Тип' },
+        { key: 'eduLang', title: 'Язык' },
         { key: 'gpa', title: 'GPA', num: true, cls: 'gpa nowrap', fmt: (v) => (v ? Number(v).toFixed(2) : '—') },
-        { key: 'imports', title: 'Импортов', num: true, cls: 'dim nowrap' },
-        { key: 'last', title: 'Последний визит', cls: 'dim', fmt: dt },
+        { key: 'imports', title: 'Имп.', num: true, cls: 'dim nowrap' },
+        { key: 'last', title: 'Визит', cls: 'dim', fmt: dt },
       ]
 
       // Фильтр каскадом: сначала поле, потом одно из значений, которые в нём встречаются.
