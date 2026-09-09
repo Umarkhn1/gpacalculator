@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
 // Официальный вход LMS через OneID: открывается в новой вкладке.
 const ONEID_URL = 'https://lms.tuit.uz/login/oneid'
+const PLAN_URL = 'https://lms.tuit.uz/student/study-plan'
 
 // Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
 // Двойка засчитывается нулём баллов, но её кредиты остаются в знаменателе.
@@ -39,6 +40,7 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   const [error, setError] = useState('')
   const [oneidOnly, setOneidOnly] = useState(false)
   const [oneidWaiting, setOneidWaiting] = useState(false)
+  const [pasteOpen, setPasteOpen] = useState(false)
   const oneidWin = useRef(null)
   const [courses, setCourses] = useState([])
   const [sel, setSel] = useState(0)
@@ -51,7 +53,7 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
     })
     setCourses(grouped)
     setSel(def)
-    onAuth(data.session, data.student)
+    if (data.session) onAuth(data.session, data.student)
     setStep('pick')
   }
 
@@ -133,11 +135,19 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   }
 
   const closeOneid = () => {
+    // Сессию LMS с нашего домена прочитать нельзя (кука HttpOnly на lms.tuit.uz),
+    // поэтому открываем в том же окне учебный план — его достаточно скопировать.
     try {
-      oneidWin.current?.close()
-    } catch {}
-    oneidWin.current = null
+      if (oneidWin.current && !oneidWin.current.closed) {
+        oneidWin.current.location = PLAN_URL
+      } else {
+        window.open(PLAN_URL, 'oneid')
+      }
+    } catch {
+      window.open(PLAN_URL, '_blank', 'noreferrer')
+    }
     setOneidWaiting(false)
+    setPasteOpen(true)
     window.focus()
   }
 
@@ -159,6 +169,32 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
       oneidWin.current?.close()
     } catch {}
   }, [])
+
+  // Импорт вставкой: страница учебного плана прямо из буфера обмена.
+  const submitPaste = async (payload) => {
+    if (!payload || payload.length < 40) {
+      setError(t.pasteEmpty)
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const { res, data } = await request({ html: payload })
+      if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.pasteEmpty)
+      handleData(data)
+    } catch (err) {
+      setError(err.message || t.pasteEmpty)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onPaste = (e) => {
+    e.preventDefault()
+    const cd = e.clipboardData
+    // HTML сохраняет таблицы — по нему разбор точнее, текст берём запасным вариантом.
+    submitPaste(cd.getData('text/html') || cd.getData('text/plain'))
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -258,6 +294,33 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
               </div>
             ) : (
               <p className="modal-note">{t.oneidHint}</p>
+            )}
+
+            {pasteOpen ? (
+              <div className="paste-box">
+                <p className="modal-hint">{t.pasteTitle}</p>
+                <ol className="paste-steps">
+                  <li>
+                    <a href={PLAN_URL} target="_blank" rel="noreferrer">
+                      {t.pasteStep1}
+                    </a>
+                  </li>
+                  <li>{t.pasteStep2}</li>
+                  <li>{t.pasteStep3}</li>
+                </ol>
+                <div
+                  className="paste-zone"
+                  contentEditable
+                  suppressContentEditableWarning
+                  onPaste={onPaste}
+                  data-placeholder={t.pastePh}
+                />
+                {loading && <p className="modal-note">{t.submitting}</p>}
+              </div>
+            ) : (
+              <button type="button" className="link-btn" onClick={() => setPasteOpen(true)}>
+                {t.pasteLink}
+              </button>
             )}
             <p className="modal-note">{t.privacy}</p>
           </form>

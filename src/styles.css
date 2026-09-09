@@ -1084,3 +1084,52 @@ select.field {
 .oneid-wait .modal-note {
   margin: 0 0 10px;
 }
+
+/* ---------- импорт вставкой страницы ---------- */
+.paste-box {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--field);
+}
+.paste-steps {
+  margin: 8px 0 12px;
+  padding-left: 20px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.paste-steps a {
+  color: var(--primary);
+}
+.paste-zone {
+  min-height: 74px;
+  max-height: 120px;
+  overflow: auto;
+  padding: 12px;
+  border: 2px dashed var(--primary-2);
+  border-radius: 11px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.paste-zone:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.paste-zone:empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-soft);
+}
+.link-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: none;
+  border: 0;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}

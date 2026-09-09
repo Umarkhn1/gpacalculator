@@ -127,7 +127,7 @@ export function parseStudyPlan(html) {
   return semesters
 }
 
-function parseStudent(html) {
+export function parseStudent(html) {
   const m = html.match(/si-student-name"[^>]*>([^<]+)</)
   const full = m ? strip(m[1]) : ''
   const tokens = full.split(/\s+/).filter(Boolean)
@@ -210,6 +210,23 @@ export function parseInfo(html) {
   }
   if (out.course) out.course = (out.course.match(/[1-8]/) || [''])[0]
   return out
+}
+
+// Вставка из буфера: если пришёл не HTML, а текст, собираем из строк таблицу —
+// при копировании таблицы ячейки разделены табами.
+function textToTable(text) {
+  const rows = String(text)
+    .split(/\r?\n/)
+    .map((line) => line.split(/\t|\s{2,}/).map((c) => c.trim()))
+    .filter((cells) => cells.length >= 3)
+  if (!rows.length) return ''
+  return (
+    '<table>' +
+    rows
+      .map((cells) => '<tr>' + cells.map((c) => `<td>${c}</td>`).join('') + '</tr>')
+      .join('') +
+    '</table>'
+  )
 }
 
 const json = (statusCode, body) => ({
@@ -297,11 +314,36 @@ function gpaOf(semesters) {
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
 
-  let login_, password, session
+  let login_, password, session, pasted
   try {
-    ;({ login: login_, password, session } = JSON.parse(event.body || '{}'))
+    ;({ login: login_, password, session, html: pasted } = JSON.parse(event.body || '{}'))
   } catch {
     return json(400, { error: 'Неверный запрос' })
+  }
+
+  // Импорт вставкой: пользователь скопировал учебный план из LMS (вход через OneID),
+  // пароль в этом случае не нужен.
+  if (pasted) {
+    const html = /<t[dr][ >]/i.test(pasted) ? pasted : textToTable(pasted)
+    const semesters = parseStudyPlan(html)
+    if (!semesters.length) return json(422, { error: 'Оценки не найдены' })
+    const student = { ...parseStudent(html), ...parseInfo(html) }
+    const headers = event.headers || {}
+    await recordImport(
+      {
+        login: student.studentId || '',
+        student,
+        ...gpaOf(semesters),
+        semesters: semesters.length,
+        viaSession: false,
+        pasted: true,
+        ip: headers['x-nf-client-connection-ip'] || headers['client-ip'] || '',
+        ua: headers['user-agent'] || '',
+        lang: (headers['accept-language'] || '').split(',')[0] || '',
+      },
+      event,
+    )
+    return json(200, { semesters, student, session: '' })
   }
 
   try {
