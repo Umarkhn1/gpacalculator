@@ -247,8 +247,32 @@ async function login(cookies, loginId, password) {
   })
   mergeCookies(cookies, getSetCookie(auth))
   const location = auth.headers.get('location') || ''
-  if (auth.status !== 302 || /auth\/login/.test(location)) return { error: 401 }
+  // LMS перенаправил на OneID — у этого аккаунта пароля больше нет.
+  if (/login\/oneid/.test(location)) return { error: 401, oneid: true }
+  if (auth.status !== 302 || /auth\/login/.test(location)) {
+    return { error: 401, message: await loginError(cookies) }
+  }
   return { ok: true }
+}
+
+// Текст ошибки LMS показываем как есть — он понятнее общей фразы.
+async function loginError(cookies) {
+  try {
+    const res = await fetch(`${LMS}/auth/login`, {
+      headers: { 'User-Agent': UA, Cookie: cookieHeader(cookies) },
+      redirect: 'manual',
+    })
+    if (res.status !== 200) return ''
+    const html = await res.text()
+    const box = html.match(/alert-danger[\s\S]{0,400}?<\/div>/)
+    if (!box) return ''
+    const text = strip(box[0].replace(/<button[\s\S]*?<\/button>/g, ' '))
+      .replace(/^×\s*/, '')
+      .trim()
+    return text.length > 200 ? '' : text
+  } catch {
+    return ''
+  }
 }
 
 // Средний балл: сумма (балл × кредит) по всем предметам / сумма их кредитов.
@@ -289,7 +313,9 @@ export const handler = async (event) => {
       if (!login_ || !password) return json(400, { error: 'Введите логин и пароль' })
       cookies = new Map()
       const res = await login(cookies, login_, password)
-      if (res.error === 401) return json(401, { error: 'Неверный логин или пароль' })
+      if (res.oneid) return json(401, { oneid: true, error: 'Войдите через OneID' })
+      if (res.error === 401)
+        return json(401, { error: res.message || 'Неверный логин или пароль' })
       if (res.error) return json(502, { error: 'Не удалось войти в LMS' })
     }
 

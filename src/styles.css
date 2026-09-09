@@ -1015,3 +1015,61 @@ select.field {
     gap: 8px;
   }
 }
+
+/* ---------- вход через OneID ---------- */
+.or-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+.or-line::before,
+.or-line::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.btn-oneid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #fff;
+  color: #003399;
+  border: 2px solid #003399;
+  text-decoration: none;
+  font-weight: 700;
+}
+.btn-oneid:hover {
+  background: #f2f6ff;
+}
+.oneid-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: #003399;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+/* Когда LMS требует OneID — подсвечиваем кнопку. */
+.btn-oneid.pulse {
+  animation: oneid-pulse 1.6s ease-in-out infinite;
+}
+@keyframes oneid-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 51, 153, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(0, 51, 153, 0);
+  }
+}

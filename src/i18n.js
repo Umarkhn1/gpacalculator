@@ -58,6 +58,10 @@ export const T = {
     stExcellent: "A'lo",
     stGood: 'Yaxshi',
     stNormal: "O'rtacha",
+    or: 'yoki',
+    oneidBtn: 'OneID orqali kirish',
+    oneidHint: "OneID sahifasi yangi oynada ochiladi. Kirgach, LMS login va parolingiz bilan bu yerga qayting.",
+    errOneid: 'Iltimos, tizimga OneID orqali kiring.',
     stCritical: 'Past',
   },
   kaa: {
@@ -105,6 +109,10 @@ export const T = {
     stExcellent: 'Ájayıp',
     stGood: 'Jaqsı',
     stNormal: 'Ortasha',
+    or: 'yamasa',
+    oneidBtn: 'OneID arqalı kiriw',
+    oneidHint: 'OneID beti jańa aynada ashıladı. Kirgennen keyin LMS login hám parolıńız benen usı jerge qaytıń.',
+    errOneid: 'Ótinish, sistemaǵa OneID arqalı kiriń.',
     stCritical: 'Tómen',
   },
   ru: {
@@ -152,6 +160,10 @@ export const T = {
     stExcellent: 'Отлично',
     stGood: 'Хорошо',
     stNormal: 'Нормально',
+    or: 'или',
+    oneidBtn: 'Войти через OneID',
+    oneidHint: 'Страница OneID откроется в новой вкладке. После входа вернитесь сюда и войдите логином и паролем LMS.',
+    errOneid: 'Пожалуйста, войдите в систему через OneID.',
     stCritical: 'Критично',
   },
   en: {
@@ -199,6 +211,10 @@ export const T = {
     stExcellent: 'Excellent',
     stGood: 'Good',
     stNormal: 'Fair',
+    or: 'or',
+    oneidBtn: 'Sign in with OneID',
+    oneidHint: 'OneID opens in a new tab. After signing in, come back and use your LMS login and password.',
+    errOneid: 'Please sign in through OneID.',
     stCritical: 'Critical',
   },
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
+// Официальный вход LMS через OneID: открывается в новой вкладке.
+const ONEID_URL = 'https://lms.tuit.uz/login/oneid'
 
 // Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
 // Двойка засчитывается нулём баллов, но её кредиты остаются в знаменателе.
@@ -35,6 +37,7 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [oneidOnly, setOneidOnly] = useState(false)
   const [courses, setCourses] = useState([])
   const [sel, setSel] = useState(0)
 
@@ -115,7 +118,12 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
     setLoading(true)
     try {
       const { res, data } = await request({ login: login.trim(), password })
-      if (res.status === 401) throw new Error(t.errWrong)
+      if (data.oneid) {
+        // У аккаунта нет пароля в LMS — вход только через OneID.
+        setOneidOnly(true)
+        throw new Error(t.errOneid)
+      }
+      if (res.status === 401) throw new Error(data.error || t.errWrong)
       if (res.status === 400) throw new Error(t.errEmpty)
       if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.errServer)
       handleData(data)
@@ -180,6 +188,20 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
             <button className="btn btn-accent full" type="submit" disabled={loading}>
               {loading ? t.submitting : t.submit}
             </button>
+
+            <div className="or-line">
+              <span>{t.or}</span>
+            </div>
+            <a
+              className={'btn btn-oneid full' + (oneidOnly ? ' pulse' : '')}
+              href={ONEID_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="oneid-mark">ID</span>
+              {t.oneidBtn}
+            </a>
+            <p className="modal-note">{t.oneidHint}</p>
             <p className="modal-note">{t.privacy}</p>
           </form>
         )}
