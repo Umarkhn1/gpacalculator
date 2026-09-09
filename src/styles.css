@@ -1133,3 +1133,13 @@ select.field {
   cursor: pointer;
   text-decoration: underline;
 }
+
+.bookmarklet {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  cursor: grab;
+}
+.bookmarklet:active {
+  cursor: grabbing;
+}

@@ -2,7 +2,7 @@
 // сохранённой сессии) и возвращает учебный план + имя студента + строку сессии.
 // Сессия позволяет повторно импортировать без повторного ввода пароля.
 
-import { recordImport, saveDiag } from './_stats-store.mjs'
+import { recordImport, saveDiag, readDiag } from './_stats-store.mjs'
 
 const LMS = 'https://lms.tuit.uz'
 const UA =
@@ -231,7 +231,13 @@ function textToTable(text) {
 
 const json = (statusCode, body) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  headers: {
+    'Content-Type': 'application/json; charset=utf-8',
+    // Закладка-импорт работает со страницы lms.tuit.uz.
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  },
   body: JSON.stringify(body),
 })
 
@@ -312,13 +318,29 @@ function gpaOf(semesters) {
 }
 
 export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return json(204, {})
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
 
-  let login_, password, session, pasted
+  let login_, password, session, pasted, info, handoff, code
   try {
-    ;({ login: login_, password, session, html: pasted } = JSON.parse(event.body || '{}'))
+    ;({
+      login: login_,
+      password,
+      session,
+      html: pasted,
+      info,
+      handoff,
+      code,
+    } = JSON.parse(event.body || '{}'))
   } catch {
     return json(400, { error: 'Неверный запрос' })
+  }
+
+  // Забираем результат, отложенный закладкой: код одноразовый.
+  if (code) {
+    const saved = await readDiag(`handoff-${String(code).replace(/[^\w-]/g, '')}`, event)
+    if (!saved) return json(404, { error: 'Ссылка устарела' })
+    return json(200, saved)
   }
 
   // Импорт вставкой: пользователь скопировал учебный план из LMS (вход через OneID),
@@ -327,7 +349,9 @@ export const handler = async (event) => {
     const html = /<t[dr][ >]/i.test(pasted) ? pasted : textToTable(pasted)
     const semesters = parseStudyPlan(html)
     if (!semesters.length) return json(422, { error: 'Оценки не найдены' })
-    const student = { ...parseStudent(html), ...parseInfo(html) }
+    // Закладка присылает и страницу профиля — из неё берём данные студента.
+    const src = info || html
+    const student = { ...parseStudent(src), ...parseInfo(src) }
     const headers = event.headers || {}
     await recordImport(
       {
@@ -343,7 +367,15 @@ export const handler = async (event) => {
       },
       event,
     )
-    return json(200, { semesters, student, session: '' })
+    const result = { semesters, student, session: '' }
+    if (handoff) {
+      // Закладка не может открыть калькулятор с данными в адресе — кладём их
+      // в хранилище на один раз и отдаём короткий код.
+      const key = Math.random().toString(36).slice(2, 10)
+      await saveDiag(`handoff-${key}`, result, event)
+      return json(200, { code: key })
+    }
+    return json(200, result)
   }
 
   try {

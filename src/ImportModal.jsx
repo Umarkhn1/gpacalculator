@@ -5,6 +5,21 @@ const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
 const ONEID_URL = 'https://lms.tuit.uz/login/oneid'
 const PLAN_URL = 'https://lms.tuit.uz/student/study-plan'
 
+// Закладка: запускается на странице LMS, где студент уже вошёл через OneID,
+// сама забирает учебный план и профиль и открывает калькулятор с оценками.
+const bookmarklet = () => {
+  const site = window.location.origin
+  return (
+    "javascript:(async()=>{try{" +
+    "var p=await(await fetch('/student/study-plan',{credentials:'include'})).text();" +
+    "var i='';try{i=await(await fetch('/student/info',{credentials:'include'})).text()}catch(e){}" +
+    "var r=await fetch('" + site + "/api/lms/import',{method:'POST',headers:{'Content-Type':'text/plain'}," +
+    "body:JSON.stringify({html:p,info:i,handoff:true})});var d=await r.json();" +
+    "if(d.code){location.href='" + site + "/#i='+d.code}else{alert(d.error||'Import error')}" +
+    "}catch(e){alert('Error: '+e.message)}})()"
+  )
+}
+
 // Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
 // Двойка засчитывается нулём баллов, но её кредиты остаются в знаменателе.
 const points5 = (grade) => (grade >= 3 ? grade : 0)
@@ -32,8 +47,8 @@ function groupCourses(semesters) {
 
 const flatten = (course) => course.semesters.flatMap((s) => s.courses)
 
-export default function ImportModal({ t, session, onClose, onApply, onAuth, onExpire }) {
-  const [step, setStep] = useState(session ? 'loading' : 'login')
+export default function ImportModal({ t, session, code, onClose, onApply, onAuth, onExpire }) {
+  const [step, setStep] = useState(session || code ? 'loading' : 'login')
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,6 +57,8 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   const [oneidWaiting, setOneidWaiting] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
   const oneidWin = useRef(null)
+  const lastPaste = useRef('')
+  const bmRef = useRef(null)
   const [courses, setCourses] = useState([])
   const [sel, setSel] = useState(0)
 
@@ -87,9 +104,37 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
     throw lastError || new Error(t.errServer)
   }
 
+  // Импорт, подготовленный закладкой: данные лежат по одноразовому коду.
+  useEffect(() => {
+    if (!code) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { res, data } = await request({ code })
+        if (cancelled) return
+        if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.errServer)
+        handleData(data)
+      } catch (err) {
+        if (!cancelled) {
+          setStep('login')
+          setError(err.message || t.errServer)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Ссылку закладки React в href не пускает — проставляем атрибутом.
+  useEffect(() => {
+    if (pasteOpen && bmRef.current) bmRef.current.setAttribute('href', bookmarklet())
+  }, [pasteOpen])
+
   // Автовход по сохранённой сессии — без повторного ввода пароля.
   useEffect(() => {
-    if (!session) return
+    if (!session || code) return
     let cancelled = false
     ;(async () => {
       try {
@@ -171,10 +216,15 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   }, [])
 
   // Импорт вставкой: страница учебного плана прямо из буфера обмена.
-  const submitPaste = async (payload) => {
+  const submitPaste = async (payload, silent = false) => {
     if (!payload || payload.length < 40) {
-      setError(t.pasteEmpty)
+      if (!silent) setError(t.pasteEmpty)
       return
+    }
+    if (silent) {
+      // Автоподхват: не дёргаем сервер, если в буфере не учебный план.
+      if (!/\d/.test(payload) || payload === lastPaste.current) return
+      lastPaste.current = payload
     }
     setError('')
     setLoading(true)
@@ -183,11 +233,39 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
       if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.pasteEmpty)
       handleData(data)
     } catch (err) {
-      setError(err.message || t.pasteEmpty)
+      if (!silent) setError(err.message || t.pasteEmpty)
     } finally {
       setLoading(false)
     }
   }
+
+  // Возврат в калькулятор: пробуем забрать скопированное сами, без нажатий.
+  useEffect(() => {
+    if (!pasteOpen) return
+    const grab = async () => {
+      if (loading) return
+      try {
+        if (navigator.clipboard?.read) {
+          const items = await navigator.clipboard.read()
+          for (const type of ['text/html', 'text/plain']) {
+            const item = items.find((i) => i.types.includes(type))
+            if (item) {
+              submitPaste(await (await item.getType(type)).text(), true)
+              return
+            }
+          }
+        } else if (navigator.clipboard?.readText) {
+          submitPaste(await navigator.clipboard.readText(), true)
+        }
+      } catch {
+        // Браузер не дал доступ к буферу — остаётся обычная вставка.
+      }
+    }
+    grab()
+    window.addEventListener('focus', grab)
+    return () => window.removeEventListener('focus', grab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pasteOpen, loading])
 
   const onPaste = (e) => {
     e.preventDefault()
@@ -316,6 +394,19 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
                   data-placeholder={t.pastePh}
                 />
                 {loading && <p className="modal-note">{t.submitting}</p>}
+
+                <div className="or-line">
+                  <span>{t.or}</span>
+                </div>
+                <a
+                  ref={bmRef}
+                  className="btn btn-line full bookmarklet"
+                  draggable="true"
+                  onClick={(e) => e.preventDefault()}
+                >
+                  {t.oneClickBtn}
+                </a>
+                <p className="modal-note">{t.oneClickHint}</p>
               </div>
             ) : (
               <button type="button" className="link-btn" onClick={() => setPasteOpen(true)}>

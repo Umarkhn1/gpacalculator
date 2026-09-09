@@ -47,6 +47,13 @@ export default function App() {
   const [langOpen, setLangOpen] = useState(false)
   const [courses, setCourses] = useState(loadCourses)
   const [importOpen, setImportOpen] = useState(false)
+  // Закладка возвращает нас с #i=<код> — сразу открываем импорт.
+  const [handoff, setHandoff] = useState(() => {
+    const m = window.location.hash.match(/#i=([\w-]+)/)
+    if (!m) return ''
+    window.history.replaceState(null, '', window.location.pathname)
+    return m[1]
+  })
   const [session, setSession] = useState(() => localStorage.getItem(SESSION_KEY) || '')
   const [student, setStudent] = useState(loadStudent)
   const t = T[lang]
@@ -54,6 +61,9 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(courses))
   }, [courses])
+  useEffect(() => {
+    if (handoff) setImportOpen(true)
+  }, [handoff])
   useEffect(() => {
     localStorage.setItem(LANG_KEY, lang)
     document.documentElement.lang = lang
@@ -345,7 +355,11 @@ export default function App() {
         <ImportModal
           t={t}
           session={session}
-          onClose={() => setImportOpen(false)}
+          code={handoff}
+          onClose={() => {
+            setImportOpen(false)
+            setHandoff('')
+          }}
           onApply={applyImport}
           onAuth={saveAuth}
           onExpire={clearAuth}
