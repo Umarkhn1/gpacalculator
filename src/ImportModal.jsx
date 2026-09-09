@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
 // Официальный вход LMS через OneID: открывается в новой вкладке.
@@ -38,6 +38,8 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [oneidOnly, setOneidOnly] = useState(false)
+  const [oneidWaiting, setOneidWaiting] = useState(false)
+  const oneidWin = useRef(null)
   const [courses, setCourses] = useState([])
   const [sel, setSel] = useState(0)
 
@@ -110,6 +112,52 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // OneID открываем отдельным окном: LMS после входа уводит на свой дашборд,
+  // поэтому окно закрываем сами и возвращаем человека в калькулятор.
+  const openOneid = () => {
+    setError('')
+    const win = window.open(
+      ONEID_URL,
+      'oneid',
+      'width=520,height=700,menubar=no,toolbar=no,location=yes',
+    )
+    if (!win) {
+      // Всплывающее окно заблокировано — открываем вкладкой.
+      window.open(ONEID_URL, '_blank', 'noreferrer')
+      return
+    }
+    oneidWin.current = win
+    setOneidWaiting(true)
+  }
+
+  const closeOneid = () => {
+    try {
+      oneidWin.current?.close()
+    } catch {}
+    oneidWin.current = null
+    setOneidWaiting(false)
+    window.focus()
+  }
+
+  // Если окно закрыли вручную — убираем ожидание.
+  useEffect(() => {
+    if (!oneidWaiting) return
+    const id = setInterval(() => {
+      if (!oneidWin.current || oneidWin.current.closed) {
+        oneidWin.current = null
+        setOneidWaiting(false)
+      }
+    }, 700)
+    return () => clearInterval(id)
+  }, [oneidWaiting])
+
+  // Окно OneID не должно пережить закрытие модалки.
+  useEffect(() => () => {
+    try {
+      oneidWin.current?.close()
+    } catch {}
   }, [])
 
   const submit = async (e) => {
@@ -192,16 +240,25 @@ export default function ImportModal({ t, session, onClose, onApply, onAuth, onEx
             <div className="or-line">
               <span>{t.or}</span>
             </div>
-            <a
+            <button
+              type="button"
               className={'btn btn-oneid full' + (oneidOnly ? ' pulse' : '')}
-              href={ONEID_URL}
-              target="_blank"
-              rel="noreferrer"
+              onClick={openOneid}
             >
               <span className="oneid-mark">ID</span>
               {t.oneidBtn}
-            </a>
-            <p className="modal-note">{t.oneidHint}</p>
+            </button>
+
+            {oneidWaiting ? (
+              <div className="oneid-wait">
+                <p className="modal-note">{t.oneidWait}</p>
+                <button type="button" className="btn btn-line full" onClick={closeOneid}>
+                  {t.oneidDone}
+                </button>
+              </div>
+            ) : (
+              <p className="modal-note">{t.oneidHint}</p>
+            )}
             <p className="modal-note">{t.privacy}</p>
           </form>
         )}

@@ -1073,3 +1073,14 @@ select.field {
     box-shadow: 0 0 0 7px rgba(0, 51, 153, 0);
   }
 }
+
+.oneid-wait {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--field);
+}
+.oneid-wait .modal-note {
+  margin: 0 0 10px;
+}
