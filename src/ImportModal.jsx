@@ -407,6 +407,11 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
                   {t.oneClickBtn}
                 </a>
                 <p className="modal-note">{t.oneClickHint}</p>
+                <p className="modal-note">
+                  <a href="/ext" target="_blank" rel="noreferrer">
+                    {t.extLink}
+                  </a>
+                </p>
               </div>
             ) : (
               <button type="button" className="link-btn" onClick={() => setPasteOpen(true)}>
