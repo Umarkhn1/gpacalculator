@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
-// Официальный вход LMS через OneID: открывается в новой вкладке.
-const ONEID_URL = 'https://lms.tuit.uz/login/oneid'
 const PLAN_URL = 'https://lms.tuit.uz/student/study-plan'
 
-// Закладка: запускается на странице LMS, где студент уже вошёл через OneID,
+// Закладка: запускается на странице LMS, где студент уже вошёл,
 // сама забирает учебный план и профиль и открывает калькулятор с оценками.
 const bookmarklet = () => {
   const site = window.location.origin
@@ -53,10 +51,7 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [oneidOnly, setOneidOnly] = useState(false)
-  const [oneidWaiting, setOneidWaiting] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
-  const oneidWin = useRef(null)
   const lastPaste = useRef('')
   const bmRef = useRef(null)
   const [courses, setCourses] = useState([])
@@ -161,60 +156,6 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // OneID открываем отдельным окном: LMS после входа уводит на свой дашборд,
-  // поэтому окно закрываем сами и возвращаем человека в калькулятор.
-  const openOneid = () => {
-    setError('')
-    const win = window.open(
-      ONEID_URL,
-      'oneid',
-      'width=520,height=700,menubar=no,toolbar=no,location=yes',
-    )
-    if (!win) {
-      // Всплывающее окно заблокировано — открываем вкладкой.
-      window.open(ONEID_URL, '_blank', 'noreferrer')
-      return
-    }
-    oneidWin.current = win
-    setOneidWaiting(true)
-  }
-
-  const closeOneid = () => {
-    // Сессию LMS с нашего домена прочитать нельзя (кука HttpOnly на lms.tuit.uz),
-    // поэтому открываем в том же окне учебный план — его достаточно скопировать.
-    try {
-      if (oneidWin.current && !oneidWin.current.closed) {
-        oneidWin.current.location = PLAN_URL
-      } else {
-        window.open(PLAN_URL, 'oneid')
-      }
-    } catch {
-      window.open(PLAN_URL, '_blank', 'noreferrer')
-    }
-    setOneidWaiting(false)
-    setPasteOpen(true)
-    window.focus()
-  }
-
-  // Если окно закрыли вручную — убираем ожидание.
-  useEffect(() => {
-    if (!oneidWaiting) return
-    const id = setInterval(() => {
-      if (!oneidWin.current || oneidWin.current.closed) {
-        oneidWin.current = null
-        setOneidWaiting(false)
-      }
-    }, 700)
-    return () => clearInterval(id)
-  }, [oneidWaiting])
-
-  // Окно OneID не должно пережить закрытие модалки.
-  useEffect(() => () => {
-    try {
-      oneidWin.current?.close()
-    } catch {}
-  }, [])
-
   // Импорт вставкой: страница учебного плана прямо из буфера обмена.
   const submitPaste = async (payload, silent = false) => {
     if (!payload || payload.length < 40) {
@@ -280,11 +221,8 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
     setLoading(true)
     try {
       const { res, data } = await request({ login: login.trim(), password })
-      if (data.oneid) {
-        // У аккаунта нет пароля в LMS — вход только через OneID.
-        setOneidOnly(true)
-        throw new Error(t.errOneid)
-      }
+      // У аккаунта нет пароля в LMS — подсказываем импорт без пароля.
+      if (data.oneid) throw new Error(t.errOneid)
       if (res.status === 401) throw new Error(data.error || t.errWrong)
       if (res.status === 400) throw new Error(t.errEmpty)
       if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.errServer)
@@ -354,24 +292,17 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
             <div className="or-line">
               <span>{t.or}</span>
             </div>
-            <button
-              type="button"
-              className={'btn btn-oneid full' + (oneidOnly ? ' pulse' : '')}
-              onClick={openOneid}
-            >
-              <span className="oneid-mark">ID</span>
-              {t.oneidBtn}
-            </button>
-
-            {oneidWaiting ? (
-              <div className="oneid-wait">
-                <p className="modal-note">{t.oneidWait}</p>
-                <button type="button" className="btn btn-line full" onClick={closeOneid}>
-                  {t.oneidDone}
-                </button>
-              </div>
-            ) : (
-              <p className="modal-note">{t.oneidHint}</p>
+            {!pasteOpen && (
+              <button
+                type="button"
+                className="btn btn-line full"
+                onClick={() => {
+                  setError('')
+                  setPasteOpen(true)
+                }}
+              >
+                {t.pasteLink}
+              </button>
             )}
 
             {pasteOpen ? (
@@ -408,11 +339,7 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
                 </a>
                 <p className="modal-note">{t.oneClickHint}</p>
               </div>
-            ) : (
-              <button type="button" className="link-btn" onClick={() => setPasteOpen(true)}>
-                {t.pasteLink}
-              </button>
-            )}
+            ) : null}
             <p className="modal-note">{t.privacy}</p>
           </form>
         )}
