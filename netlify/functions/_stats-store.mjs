@@ -57,6 +57,8 @@ export async function recordImport(data, event) {
     curator: data.student?.curator || '',
     eduType: data.student?.eduType || '',
     eduLang: data.student?.eduLang || '',
+    // Какие поля вычислены (по ФИО или плану), а не взяты со страницы LMS.
+    derived: data.student?.derived || [],
     gpa: data.gpa ?? null,
     credits: data.credits ?? null,
     subjects: data.subjects ?? null,
@@ -83,9 +85,7 @@ export async function recordImport(data, event) {
   const key = `users/${ident.replace(/[^\wа-яё.@'-]+/gi, '_')}`
   try {
     const prev = (await s.get(key, { type: 'json' })) || null
-    // Пустое значение не должно затирать то, что уже узнали о студенте.
-    const merged = { ...rec }
-    if (prev) for (const [k, v] of Object.entries(prev)) if (!merged[k] && v) merged[k] = v
+    const merged = mergeUser(prev, rec)
     await s.setJSON(key, {
       ...merged,
       first: prev?.first || ts,
@@ -96,6 +96,26 @@ export async function recordImport(data, event) {
     console.error('stats: user write failed', e?.message)
   }
   return true
+}
+
+// Слияние новой записи со сводкой по студенту. Пустое значение не затирает известное,
+// а вычисленное (≈) никогда не затирает настоящее значение со страницы LMS.
+export function mergeUser(prev, rec) {
+  const merged = { ...rec }
+  const derived = new Set(rec.derived || [])
+  if (prev) {
+    const prevDerived = new Set(prev.derived || [])
+    for (const [k, v] of Object.entries(prev)) {
+      if (k === 'derived' || !v) continue
+      const keepPrev = !merged[k] || (derived.has(k) && !prevDerived.has(k))
+      if (!keepPrev) continue
+      merged[k] = v
+      if (prevDerived.has(k)) derived.add(k)
+      else derived.delete(k)
+    }
+  }
+  merged.derived = [...derived]
+  return merged
 }
 
 async function listAll(s, prefix) {

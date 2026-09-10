@@ -121,6 +121,11 @@
       th, td { text-align: left; padding: 9px 6px; vertical-align: top; overflow-wrap: anywhere; }
       td.nowrap, th.nowrap { white-space: nowrap; }
       td.wrap, th.wrap { max-width: 180px; }
+      /* На телефоне колонкам тесно: таблица прокручивается вбок, а не рвёт слова по буквам. */
+      @media (max-width: 900px) {
+        th, td { overflow-wrap: normal; white-space: nowrap; }
+        td.wrap, th.wrap { white-space: normal; min-width: 170px; }
+      }
       thead th {
         position: sticky;
         top: 0;
@@ -146,6 +151,13 @@
       .g-mid { color: var(--primary); }
       .g-norm { color: var(--amber); }
       .g-low { color: var(--red); }
+      /* Сводка над таблицей: пересчитывается под поиск и фильтр. */
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+      .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; }
+      .stat b { display: block; font-size: 26px; line-height: 1.15; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .stat span { font-size: 12.5px; color: var(--ink-soft); }
+      .approx { color: var(--amber); font-weight: 700; margin-right: 3px; }
+      .legend { color: var(--ink-soft); font-size: 12.5px; white-space: nowrap; }
       .mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 13px; }
       .empty { padding: 28px; text-align: center; color: var(--ink-soft); }
 
@@ -282,6 +294,26 @@
         return out
       }
 
+      // Сводка по тем, кто сейчас в таблице (с учётом поиска и фильтра).
+      function statsHtml(list) {
+        const today = new Date().toDateString()
+        const week = Date.now() - 7 * 864e5
+        const gpas = list.map((r) => Number(r.gpa)).filter((g) => g > 0)
+        const avg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : 0
+        const band = !avg ? '' : avg >= 4.5 ? 'g-high' : avg >= 3.5 ? 'g-mid' : avg >= 2.6 ? 'g-norm' : 'g-low'
+        const card = (value, label, cls) =>
+          '<div class="stat"><b class="' + (cls || '') + '">' + value + '</b><span>' + label + '</span></div>'
+        return (
+          '<div class="stats">' +
+          card(list.length, 'студентов') +
+          card(list.reduce((n, r) => n + (Number(r.imports) || 0), 0), 'импортов') +
+          card(avg ? avg.toFixed(2) : '—', 'средний GPA', band) +
+          card(list.filter((r) => r.last && new Date(r.last).toDateString() === today).length, 'активны сегодня') +
+          card(list.filter((r) => r.last && new Date(r.last).getTime() >= week).length, 'за 7 дней') +
+          '</div>'
+        )
+      }
+
       function render() {
         const list = visible()
         const head = COLS.map((c) => {
@@ -298,8 +330,12 @@
               COLS.map((c) => {
                 const val = c.fmt ? c.fmt(r[c.key]) : r[c.key]
                 const cls = (c.cls || '') + (c.clsOf ? ' ' + c.clsOf(r[c.key]) : '')
-                const title = c.titleOf ? ' title="' + esc(c.titleOf(r[c.key])) + '"' : ''
-                return '<td class="' + cls.trim() + '"' + title + '>' + esc(val || '—') + '</td>'
+                // Вычисленное по ФИО или учебному плану — с пометкой «≈».
+                const guessed = val && (r.derived || []).includes(c.key)
+                const title = guessed
+                  ? ' title="Вычислено по ФИО или учебному плану, а не взято из LMS"'
+                  : c.titleOf ? ' title="' + esc(c.titleOf(r[c.key])) + '"' : ''
+                return '<td class="' + cls.trim() + '"' + title + '>' + (guessed ? '<span class="approx">≈</span>' : '') + esc(val || '—') + '</td>'
               }).join('') +
               '</tr>',
           )
@@ -330,10 +366,12 @@
           '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />' +
           '</svg></button>' +
           '<button id="out">Выйти</button></div></div>' +
+          statsHtml(list) +
           '<div class="tools">' +
           '<input type="search" id="q" placeholder="Поиск по ФИО, логину, группе…" value="' + esc(state.q) + '" />' +
           filters +
-          '<span class="count">' + list.length + ' из ' + rows.length + '</span></div>' +
+          '<span class="count">' + list.length + ' из ' + rows.length + '</span>' +
+          '<span class="legend"><span class="approx">≈</span> вычислено по ФИО или учебному плану</span></div>' +
           '<div class="panel"><div class="scroll">' +
           (rows.length
             ? '<table><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>'

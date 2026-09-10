@@ -59,7 +59,7 @@ const identity = (r) =>
     .trim()
 
 // Одна строка на студента: последние известные данные + счётчик импортов.
-function students(events, users) {
+export function students(events, users) {
   const byId = new Map()
   const put = (id, row) => {
     const cur = byId.get(id)
@@ -68,9 +68,17 @@ function students(events, users) {
       return
     }
     // Свежая запись обновляет поля, старая — только дополняет пустые.
+    // Вычисленное (≈) не затирает настоящее, а настоящее всегда вытесняет вычисленное.
     const fresher = String(row.last || '') > String(cur.last || '')
     for (const f of FIELDS) {
-      if (row[f] && (fresher || !cur[f])) cur[f] = row[f]
+      if (!row[f]) continue
+      const rowGuess = row.derived.includes(f)
+      const curGuess = cur.derived.includes(f)
+      const take = !cur[f] || (curGuess && !rowGuess) || (fresher && rowGuess === curGuess)
+      if (!take) continue
+      cur[f] = row[f]
+      cur.derived = cur.derived.filter((x) => x !== f)
+      if (rowGuess) cur.derived.push(f)
     }
     cur.imports += row.imports
     if (row.first && (!cur.first || row.first < cur.first)) cur.first = row.first
@@ -83,6 +91,7 @@ function students(events, users) {
     put(id, {
       id,
       ...pick(u),
+      derived: [...(u.derived || [])],
       first: u.first || u.ts || '',
       last: u.last || u.ts || '',
       imports: u.imports || 1,
@@ -93,7 +102,7 @@ function students(events, users) {
     for (const e of events) {
       const id = identity(e)
       if (!id) continue
-      put(id, { id, ...pick(e), first: e.ts, last: e.ts, imports: 1 })
+      put(id, { id, ...pick(e), derived: [...(e.derived || [])], first: e.ts, last: e.ts, imports: 1 })
     }
   }
 

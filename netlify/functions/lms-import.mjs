@@ -229,6 +229,64 @@ function textToTable(text) {
   )
 }
 
+// ---------- то, что можно вычислить без страницы «Информация» ----------
+// При импорте без пароля есть только учебный план и ФИО. Пол, курс и язык обучения
+// из них выводятся; такие поля помечаются как вычисленные и в дашборде идут с «≈».
+
+// Пол по ФИО: узбекское отчество o'g'li / qizi, иначе — окончание фамилии.
+export function genderFromName(full) {
+  const n = norm(full).toLowerCase()
+  if (/(^|\s)(o'?g'?li|ogli|ўғли|угли|оглы)(\s|$)/.test(n)) return 'Мужской'
+  if (/(^|\s)(qizi|қизи|кизи|кызы)(\s|$)/.test(n)) return 'Женский'
+  const surname = n.split(/\s+/)[0] || ''
+  if (/(ova|eva|yeva|ова|ева)$/.test(surname)) return 'Женский'
+  if (/(ov|ev|yev|ов|ев)$/.test(surname)) return 'Мужской'
+  return ''
+}
+
+// Курс по учебному плану: семестр закрыт, если оценки стоят хотя бы у половины предметов.
+// Текущий семестр — следующий за последним закрытым.
+export function courseFromPlan(semesters) {
+  if (!semesters.length) return ''
+  let done = 0
+  semesters.forEach((s, i) => {
+    const graded = s.courses.filter((c) => c.grade).length
+    if (s.courses.length && graded / s.courses.length >= 0.5) done = i + 1
+  })
+  const current = Math.min(done + 1, semesters.length)
+  return String(Math.ceil(current / 2))
+}
+
+// Язык обучения по названиям предметов: кириллица — RU, латиница — UZ или EN.
+export function langFromPlan(semesters) {
+  const text = semesters.flatMap((s) => s.courses.map((c) => c.name)).join(' ')
+  const cyr = (text.match(/[а-яё]/gi) || []).length
+  const lat = (text.match(/[a-z]/gi) || []).length
+  if (!cyr && !lat) return ''
+  if (cyr / (cyr + lat) > 0.6) return 'RU'
+  const t = norm(text).toLowerCase()
+  const uz = (t.match(/o'|g'|q|x|sh|ch|lari|lash|ning|asoslari|tizim/g) || []).length
+  const en = (t.match(/tion|ing\b|\bthe\b|\band\b|\bof\b|ics\b|ment\b/g) || []).length
+  return en > uz ? 'EN' : 'UZ'
+}
+
+// Заполняем только пустые поля и запоминаем, какие из них вычислены.
+function deriveMissing(student, semesters) {
+  const out = { derived: [] }
+  const guess = {
+    gender: genderFromName(student.full || ''),
+    course: courseFromPlan(semesters),
+    eduLang: langFromPlan(semesters),
+  }
+  for (const [field, value] of Object.entries(guess)) {
+    if (!student[field] && value) {
+      out[field] = value
+      out.derived.push(field)
+    }
+  }
+  return out
+}
+
 const json = (statusCode, body) => ({
   statusCode,
   headers: {
@@ -377,6 +435,7 @@ export const handler = async (event) => {
     // Закладка присылает и страницу профиля — из неё берём данные студента.
     const src = info || html
     const student = { ...parseStudent(src), ...parseInfo(src) }
+    Object.assign(student, deriveMissing(student, semesters))
     const headers = event.headers || {}
     await recordImport(
       {
@@ -451,6 +510,9 @@ export const handler = async (event) => {
         infoChunks = textChunks(infoHtml).slice(0, 120)
       } catch {}
     }
+
+    // Если страницу «Информация» получить не удалось — хотя бы то, что вычисляется.
+    Object.assign(student, deriveMissing(student, semesters))
 
     // Статистика для дашборда. Ошибки записи не должны ломать импорт.
     const headers = event.headers || {}
