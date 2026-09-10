@@ -2,6 +2,9 @@
 // Данные живут на стороне сайта и переживают любые деплои, поэтому записи,
 // сделанные прошлыми версиями функции, никуда не пропадают.
 
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+
 const STORE = 'gpa-stats'
 
 // Имена хранилищ, которыми пользовались прошлые версии дашборда.
@@ -24,7 +27,41 @@ async function blobs(event) {
   }
 }
 
+// На Netlify функции работают в AWS Lambda — там настоящее хранилище Blobs.
+// Локально (npm run dev) Blobs нет, поэтому пишем в файл: так дашборд можно проверить без деплоя.
+const onNetlify = () => Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)
+const LOCAL_FILE = path.resolve('.netlify', 'stats-local.json')
+
+function localStore() {
+  const load = async () => {
+    try {
+      return JSON.parse(await fs.readFile(LOCAL_FILE, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+  const save = async (all) => {
+    await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true })
+    await fs.writeFile(LOCAL_FILE, JSON.stringify(all, null, 1))
+  }
+  return {
+    async setJSON(key, value) {
+      const all = await load()
+      all[key] = value
+      await save(all)
+    },
+    async get(key) {
+      return (await load())[key] ?? null
+    },
+    async list({ prefix = '' } = {}) {
+      const keys = Object.keys(await load()).filter((k) => k.startsWith(prefix))
+      return { blobs: keys.map((key) => ({ key })) }
+    },
+  }
+}
+
 async function store(name = STORE) {
+  if (!onNetlify()) return name === STORE ? localStore() : null
   const mod = await blobs()
   if (!mod) return null
   // Строгая консистентность в этом рантайме недоступна — оставляем обычную.
@@ -36,6 +73,14 @@ async function store(name = STORE) {
 }
 
 const rid = () => Math.random().toString(36).slice(2, 8)
+
+// Студент опознаётся по фамилии и имени: на странице учебного плана ФИО без отчества,
+// а на странице «Информация» — полное. Логин — если имени нет вовсе.
+export function personKey(r) {
+  const full = String(r.full || '').replace(/[`´ʻʼ‘’']/g, "'").toLowerCase().replace(/\s+/g, ' ').trim()
+  if (full) return full.split(' ').slice(0, 2).join(' ')
+  return String(r.login || '').toLowerCase().trim()
+}
 
 // Одна запись события + сводка по студенту (чтобы считать уникальных).
 export async function recordImport(data, event) {
@@ -77,11 +122,9 @@ export async function recordImport(data, event) {
   // Сводка по студенту: первый визит, последний, число импортов.
   // Ключ сводки — по ФИО: логин известен не всегда (импорт по сохранённой сессии),
   // а один студент должен оставаться одной строкой.
-  const ident = (rec.full || rec.login || 'anon')
-    .replace(/[`´ʻʼ‘’']/g, "'")
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
+  // Без ФИО и логина (например, вставлен текст без шапки LMS) — своя строка на каждый импорт,
+  // чтобы разные люди не слились в одного «безымянного».
+  const ident = personKey(rec) || `anon-${ts}-${rid()}`
   const key = `users/${ident.replace(/[^\wа-яё.@'-]+/gi, '_')}`
   try {
     const prev = (await s.get(key, { type: 'json' })) || null
@@ -115,6 +158,8 @@ export function mergeUser(prev, rec) {
     }
   }
   merged.derived = [...derived]
+  // Полное ФИО (с отчеством) важнее короткого из шапки LMS.
+  if (prev?.full && String(prev.full).length > String(merged.full || '').length) merged.full = prev.full
   return merged
 }
 

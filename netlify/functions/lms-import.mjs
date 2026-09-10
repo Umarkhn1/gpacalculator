@@ -129,7 +129,17 @@ export function parseStudyPlan(html) {
 
 export function parseStudent(html) {
   const m = html.match(/si-student-name"[^>]*>([^<]+)</)
-  const full = m ? strip(m[1]) : ''
+  let full = m ? strip(m[1]) : ''
+  // На странице учебного плана карточки профиля нет — ФИО только в меню пользователя
+  // в шапке: текст последнего <div> перед ссылкой «Настройки профиля» (без отчества).
+  if (!full) {
+    const at = html.search(/<a[^>]*profile\/password/i)
+    if (at > 0) {
+      const divs = [...html.slice(Math.max(0, at - 1200), at).matchAll(/<div[^>]*>([^<]{3,400})<\/div>/gi)]
+      const last = divs.length ? strip(divs[divs.length - 1][1]) : ''
+      if (/^[^\d@<>]{3,80}$/.test(last) && last.split(/\s+/).length >= 2) full = last
+    }
+  }
   const tokens = full.split(/\s+/).filter(Boolean)
   // Формат: Фамилия Имя Отчество [o‘g‘li/qizi] → имя это второе слово.
   const name = tokens[1] || tokens[0] || ''

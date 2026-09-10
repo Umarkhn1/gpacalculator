@@ -200,7 +200,7 @@
 
       // Колонки таблицы: ключ данных, заголовок, как показывать и как сортировать.
       const COLS = [
-        { key: 'full', title: 'ФИО', cls: 'wrap' },
+        { key: 'full', title: 'ФИО', cls: 'wrap', fmt: (v) => v || 'Без имени' },
         { key: 'login', title: 'Логин', cls: 'mono dim nowrap' },
         { key: 'group', title: 'Группа' },
         { key: 'specialty', title: 'Направление', cls: 'wrap' },

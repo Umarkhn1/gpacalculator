@@ -87,7 +87,11 @@ function onlyTables(html) {
   const tables = html.match(/<table[\s\S]*?<\/table>/gi)
   if (!tables) return html
   const name = html.match(/<[^>]*si-student-name[^>]*>[^<]*</)
-  return (name ? name[0] : '') + tables.join('\n')
+  // На странице учебного плана ФИО есть только в меню пользователя в шапке —
+  // прямо перед ссылкой «Настройки профиля». Отправляем этот кусочек вместе с таблицами.
+  const menu = html.search(/<a[^>]*profile\/password/i)
+  const header = menu > 0 ? html.slice(Math.max(0, menu - 1200), menu + 60) : ''
+  return (name ? name[0] : '') + header + tables.join('\n')
 }
 
 // Safari сохраняет «Веб-архив» (.webarchive) — это бинарный plist, но HTML страницы

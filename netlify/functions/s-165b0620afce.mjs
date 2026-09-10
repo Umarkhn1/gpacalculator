@@ -1,7 +1,7 @@
 // Приватный API статистики. Отдаёт список студентов, которые импортировали оценки.
 // Доступ только по ключу: заголовок x-access-key (или x-api-key / Bearer / ?key=).
 
-import { readAll, selfTest, readDiag } from './_stats-store.mjs'
+import { readAll, selfTest, readDiag, personKey } from './_stats-store.mjs'
 
 const KEY = process.env.STATS_KEY || 'b8c2d85d8639d6be2baa7a3f'
 
@@ -50,13 +50,9 @@ const pick = (src) => {
   return out
 }
 
-// Один студент — одна строка. Опознаём по ФИО (логина при импорте по сессии нет).
-const identity = (r) =>
-  String(r.full || r.login || r.name || '')
-    .replace(/[`´ʻʼ‘’']/g, "'")
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
+// Один студент — одна строка. Опознаём по фамилии и имени (логина при импорте
+// без пароля нет, а ФИО на странице плана — без отчества).
+const identity = (r) => personKey(r)
 
 // Одна строка на студента: последние известные данные + счётчик импортов.
 export function students(events, users) {
@@ -70,6 +66,8 @@ export function students(events, users) {
     // Свежая запись обновляет поля, старая — только дополняет пустые.
     // Вычисленное (≈) не затирает настоящее, а настоящее всегда вытесняет вычисленное.
     const fresher = String(row.last || '') > String(cur.last || '')
+    // Полное ФИО (с отчеством) важнее короткого из шапки LMS — берём более длинное.
+    const fullest = String(row.full || '').length > String(cur.full || '').length ? row.full : cur.full
     for (const f of FIELDS) {
       if (!row[f]) continue
       const rowGuess = row.derived.includes(f)
@@ -80,13 +78,15 @@ export function students(events, users) {
       cur.derived = cur.derived.filter((x) => x !== f)
       if (rowGuess) cur.derived.push(f)
     }
+    cur.full = fullest
     cur.imports += row.imports
     if (row.first && (!cur.first || row.first < cur.first)) cur.first = row.first
     if (row.last && (!cur.last || row.last > cur.last)) cur.last = row.last
   }
 
+  // Запись без ФИО и логина не выбрасываем — она идёт своей строкой «Без имени».
   for (const u of users) {
-    const id = identity(u)
+    const id = identity(u) || u.key
     if (!id) continue
     put(id, {
       id,
@@ -100,7 +100,7 @@ export function students(events, users) {
   // События нужны, если сводки по студенту нет (записи прошлых версий).
   if (!users.length) {
     for (const e of events) {
-      const id = identity(e)
+      const id = identity(e) || e.key
       if (!id) continue
       put(id, { id, ...pick(e), derived: [...(e.derived || [])], first: e.ts, last: e.ts, imports: 1 })
     }
