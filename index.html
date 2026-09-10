@@ -2,8 +2,25 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <meta name="theme-color" content="#eef3f8" />
+    <!-- Тема до первого кадра: без вспышки светлого фона у тех, кто выбрал тёмную. -->
+    <script>
+      try {
+        var theme =
+          localStorage.getItem('tuit-gpa-theme') ||
+          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        document.documentElement.dataset.theme = theme
+        if (theme === 'dark') document.querySelector('meta[name="theme-color"]').content = '#0b1220'
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- Масштаб страницы зафиксирован: без щипка и двойного тапа.
+         iOS Safari игнорирует user-scalable=no, поэтому жест гасим и скриптом. -->
+    <script>
+      document.addEventListener('gesturestart', function (e) { e.preventDefault() })
+      document.addEventListener('touchmove', function (e) { if (e.touches.length > 1) e.preventDefault() }, { passive: false })
+    </script>
 
     <!-- Primary Meta Tags -->
     <title>GPA Calculator</title>

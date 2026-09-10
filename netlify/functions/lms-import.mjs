@@ -270,31 +270,56 @@ async function login(cookies, loginId, password) {
   })
   mergeCookies(cookies, getSetCookie(auth))
   const location = auth.headers.get('location') || ''
-  // LMS перенаправил на OneID — у этого аккаунта пароля больше нет.
-  if (/login\/oneid/.test(location)) return { error: 401, oneid: true }
-  if (auth.status !== 302 || /auth\/login/.test(location)) {
-    return { error: 401, message: await loginError(cookies) }
-  }
-  return { ok: true }
+  // Успех — LMS уводит со страницы входа (на дашборд).
+  if (auth.status === 302 && !/auth\/login|login\/oneid/.test(location)) return { ok: true }
+  return { error: 401, ...(await loginFailure(cookies, auth, location)) }
 }
 
-// Текст ошибки LMS показываем как есть — он понятнее общей фразы.
-async function loginError(cookies) {
+// Отличаем «неверный пароль» от «LMS не пускает по паролю» (требует OneID и т. п.).
+// Если LMS прямо не сказал, что данные неверные, человека не виним — честно пишем,
+// что вход по паролю сейчас недоступен.
+const WRONG_RE = /(mavjud emas|noto'?g'?ri|parol xato|неверн|не найден|не совпада|incorrect|do not match|invalid credentials|not found)/i
+
+export function classifyLoginPage(html, location = '') {
+  if (/oneid/i.test(location)) return { oneid: true, message: '' }
+  const message = loginMessage(html)
+  if (mentionsOneid(html) || /one\s?id/i.test(message)) return { oneid: true, message }
+  if (WRONG_RE.test(norm(message))) return { wrong: true, message }
+  return { unknown: true, message }
+}
+
+// Текст ошибки: плашки alert, подсказки под полями и всплывающие уведомления.
+function loginMessage(html) {
+  const parts = []
+  const boxes = /<div[^>]*class="[^"]*\b(?:alert|invalid-feedback|text-danger|error)\b[^"]*"[^>]*>([\s\S]{0,600}?)<\/div>/gi
+  for (const m of html.matchAll(boxes)) {
+    parts.push(strip(m[1].replace(/<button[\s\S]*?<\/button>/gi, ' ')).replace(/^×\s*/, ''))
+  }
+  const toasts = /(?:toastr\.\w+|Swal\.fire|swal|alert)\(\s*(?:\{[^}]*?(?:text|title|html)\s*:\s*)?['"`]([^'"`]{3,300})['"`]/gi
+  for (const m of html.matchAll(toasts)) parts.push(m[1])
+  return parts.filter(Boolean).join(' ').slice(0, 300)
+}
+
+// Упоминание OneID где-нибудь, кроме самой кнопки «OneID» — она на странице входа есть всегда.
+function mentionsOneid(html) {
+  const rest = html.replace(/<a[^>]*login\/oneid[\s\S]*?<\/a>/gi, ' ').replace(/<img[^>]*oneid[^>]*>/gi, ' ')
+  return /one\s?id/i.test(rest)
+}
+
+async function loginFailure(cookies, auth, location) {
   try {
+    // Ошибка могла прийти прямо в ответе на отправку формы…
+    if (auth.status === 200) return classifyLoginPage(await auth.text(), location)
+    if (/oneid/i.test(location)) return { oneid: true, message: '' }
+    // …или флеш-сообщением на странице входа после редиректа.
     const res = await fetch(`${LMS}/auth/login`, {
       headers: { 'User-Agent': UA, Cookie: cookieHeader(cookies) },
       redirect: 'manual',
     })
-    if (res.status !== 200) return ''
-    const html = await res.text()
-    const box = html.match(/alert-danger[\s\S]{0,400}?<\/div>/)
-    if (!box) return ''
-    const text = strip(box[0].replace(/<button[\s\S]*?<\/button>/g, ' '))
-      .replace(/^×\s*/, '')
-      .trim()
-    return text.length > 200 ? '' : text
+    const next = res.headers.get('location') || ''
+    return classifyLoginPage(res.status === 200 ? await res.text() : '', next)
   } catch {
-    return ''
+    return { unknown: true, message: '' }
   }
 }
 
@@ -387,9 +412,14 @@ export const handler = async (event) => {
       if (!login_ || !password) return json(400, { error: 'Введите логин и пароль' })
       cookies = new Map()
       const res = await login(cookies, login_, password)
-      if (res.oneid) return json(401, { oneid: true, error: 'Войдите через OneID' })
-      if (res.error === 401)
+      // «Неверный пароль» — только если LMS сказал это прямо. Всё остальное (требует OneID,
+      // непонятный ответ) — «вход по паролю временно недоступен».
+      if (res.error === 401 && res.wrong) {
         return json(401, { error: res.message || 'Неверный логин или пароль' })
+      }
+      if (res.error === 401) {
+        return json(401, { unavailable: true, oneid: Boolean(res.oneid), error: 'Вход по паролю временно недоступен' })
+      }
       if (res.error) return json(502, { error: 'Не удалось войти в LMS' })
     }
 

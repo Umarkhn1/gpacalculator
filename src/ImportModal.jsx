@@ -1,22 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { readGradesFile } from './readFile.js'
 
 const ENDPOINTS = ['/api/lms/import', '/.netlify/functions/lms-import']
 const PLAN_URL = 'https://lms.tuit.uz/student/study-plan'
-
-// Закладка: запускается на странице LMS, где студент уже вошёл,
-// сама забирает учебный план и профиль и открывает калькулятор с оценками.
-const bookmarklet = () => {
-  const site = window.location.origin
-  return (
-    "javascript:(async()=>{try{" +
-    "var p=await(await fetch('/student/study-plan',{credentials:'include'})).text();" +
-    "var i='';try{i=await(await fetch('/student/info',{credentials:'include'})).text()}catch(e){}" +
-    "var r=await fetch('" + site + "/api/lms/import',{method:'POST',headers:{'Content-Type':'text/plain'}," +
-    "body:JSON.stringify({html:p,info:i,handoff:true})});var d=await r.json();" +
-    "if(d.code){location.href='" + site + "/#i='+d.code}else{alert(d.error||'Import error')}" +
-    "}catch(e){alert('Error: '+e.message)}})()"
-  )
-}
 
 // Средний балл: сумма (балл × кредит) / сумма кредитов предметов с оценкой.
 // Двойка засчитывается нулём баллов, но её кредиты остаются в знаменателе.
@@ -43,30 +29,54 @@ function groupCourses(semesters) {
   return courses
 }
 
+// По умолчанию открываем последний курс, где уже есть оценки.
+function defaultCourse(grouped) {
+  let def = grouped.length - 1
+  grouped.forEach((c, i) => {
+    if (c.semesters.some((s) => s.courses.some((x) => x.grade))) def = i
+  })
+  return def
+}
+
 const flatten = (course) => course.semesters.flatMap((s) => s.courses)
 
-export default function ImportModal({ t, session, code, onClose, onApply, onAuth, onExpire }) {
-  const [step, setStep] = useState(session || code ? 'loading' : 'login')
+export default function ImportModal({
+  t,
+  session,
+  code,
+  plan,
+  onClose,
+  onApply,
+  onAuth,
+  onExpire,
+  onPlan,
+  onLogout,
+}) {
+  // Последний импорт хранит калькулятор: после импорта без пароля сессии нет,
+  // поэтому окно при повторном открытии сразу показывает выбор курса, а не просит файл заново.
+  const saved = !session && !code && plan?.semesters?.length ? plan.semesters : null
+  const [step, setStep] = useState(session || code ? 'loading' : saved ? 'pick' : 'login')
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
+  const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
   const lastPaste = useRef('')
-  const bmRef = useRef(null)
-  const [courses, setCourses] = useState([])
-  const [sel, setSel] = useState(0)
+  const [courses, setCourses] = useState(() => (saved ? groupCourses(saved) : []))
+  const [sel, setSel] = useState(() => (saved ? defaultCourse(groupCourses(saved)) : 0))
+
+  const showPlan = (semesters) => {
+    const grouped = groupCourses(semesters)
+    setCourses(grouped)
+    setSel(defaultCourse(grouped))
+    setStep('pick')
+  }
 
   const handleData = (data) => {
-    const grouped = groupCourses(data.semesters)
-    let def = grouped.length - 1
-    grouped.forEach((c, i) => {
-      if (c.semesters.some((s) => s.courses.some((x) => x.grade))) def = i
-    })
-    setCourses(grouped)
-    setSel(def)
     if (data.session) onAuth(data.session, data.student)
-    setStep('pick')
+    onPlan({ semesters: data.semesters, student: data.student })
+    showPlan(data.semesters)
   }
 
   const request = async (payload) => {
@@ -122,11 +132,6 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Ссылку закладки React в href не пускает — проставляем атрибутом.
-  useEffect(() => {
-    if (pasteOpen && bmRef.current) bmRef.current.setAttribute('href', bookmarklet())
-  }, [pasteOpen])
-
   // Автовход по сохранённой сессии — без повторного ввода пароля.
   useEffect(() => {
     if (!session || code) return
@@ -137,7 +142,9 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
         if (cancelled) return
         if (res.status === 401 || data.expired) {
           onExpire()
-          setStep('login')
+          // Сессия истекла, но последний импорт остался — показываем его.
+          if (plan?.semesters?.length) showPlan(plan.semesters)
+          else setStep('login')
           return
         }
         if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.errServer)
@@ -145,8 +152,11 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
       } catch (err) {
         if (!cancelled) {
           onExpire()
-          setStep('login')
-          setError(err.message || t.errServer)
+          if (plan?.semesters?.length) showPlan(plan.semesters)
+          else {
+            setStep('login')
+            setError(err.message || t.errServer)
+          }
         }
       }
     })()
@@ -208,6 +218,23 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pasteOpen, loading])
 
+  // Телефон: страницу учебного плана удобнее сохранить в PDF и загрузить файлом.
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError('')
+    setLoading(true)
+    try {
+      const text = await readGradesFile(file)
+      await submitPaste(text)
+    } catch (err) {
+      setError(err.message || t.pasteEmpty)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const onPaste = (e) => {
     e.preventDefault()
     const cd = e.clipboardData
@@ -222,7 +249,12 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
     try {
       const { res, data } = await request({ login: login.trim(), password })
       // У аккаунта нет пароля в LMS — подсказываем импорт без пароля.
-      if (data.oneid) throw new Error(t.errOneid)
+      // LMS не пустил по паролю, но и не сказал, что он неверный (например, требует OneID), —
+      // пишем, что вход временно недоступен, и сразу открываем импорт без пароля.
+      if (data.unavailable || data.oneid || /oneid/i.test(data.error || '')) {
+        setPasteOpen(true)
+        throw new Error(t.errOneid)
+      }
       if (res.status === 401) throw new Error(data.error || t.errWrong)
       if (res.status === 400) throw new Error(t.errEmpty)
       if (!res.ok || !data.semesters?.length) throw new Error(data.error || t.errServer)
@@ -274,13 +306,37 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
             </label>
             <label className="fld">
               <span>{t.password}</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder={t.passPh}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <div className="pass-wrap">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  placeholder={t.passPh}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="pass-eye"
+                  onClick={() => setShowPass((v) => !v)}
+                  aria-label={showPass ? t.hidePass : t.showPass}
+                  aria-pressed={showPass}
+                  title={showPass ? t.hidePass : t.showPass}
+                >
+                  {showPass ? (
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </label>
 
             {error && <div className="alert">{error}</div>}
@@ -329,17 +385,20 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
                 <div className="or-line">
                   <span>{t.or}</span>
                 </div>
-                <a
-                  ref={bmRef}
-                  className="btn btn-line full bookmarklet"
-                  draggable="true"
-                  onClick={(e) => e.preventDefault()}
-                >
-                  {t.oneClickBtn}
-                </a>
-                <p className="modal-note">{t.oneClickHint}</p>
+                <label className="btn btn-line full file-pick">
+                  {t.fileBtn}
+                  <input
+                    type="file"
+                    onChange={onFile}
+                  />
+                </label>
+                <p className="modal-note">{t.fileHint}</p>
+
               </div>
             ) : null}
+            <a className="help-link" href="/help" target="_blank" rel="noreferrer">
+              {t.helpLink}
+            </a>
             <p className="modal-note">{t.privacy}</p>
           </form>
         )}
@@ -397,7 +456,7 @@ export default function ImportModal({ t, session, code, onClose, onApply, onAuth
             <button
               className="modal-logout"
               onClick={() => {
-                onExpire()
+                onLogout()
                 setCourses([])
                 setLogin('')
                 setPassword('')

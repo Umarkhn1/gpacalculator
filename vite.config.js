@@ -17,6 +17,7 @@ function netlifyDevApi() {
       // Красивый путь страницы статистики, как на Netlify.
       server.middlewares.use((req, _res, next) => {
         if (req.url === '/165b0620afce') req.url = '/165b0620afce.html'
+        if (req.url === '/help' || req.url.startsWith('/help?')) req.url = req.url.replace('/help', '/help.html')
         next()
       })
 

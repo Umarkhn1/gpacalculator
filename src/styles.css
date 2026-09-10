@@ -25,6 +25,11 @@ body {
   margin: 0;
   min-height: 100%;
 }
+/* Только прокрутка — щипок и двойной тап не увеличивают страницу. */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
 body {
   background: var(--bg);
   color: var(--ink);
@@ -54,11 +59,43 @@ body {
   min-width: 0;
 }
 .brand-logo {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
   flex: none;
   /* без рамки — сливается с фоном */
+}
+/* Логотип мягко «дышит» светом по кругу печати — сильнее в тёмной теме.
+   Именно box-shadow: drop-shadow размывал тонкие линии эмблемы. */
+.brand-logo {
+  border-radius: 50%;
+  animation: logo-glow 4.5s ease-in-out infinite;
+}
+@keyframes logo-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px 0 rgba(53, 119, 212, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 10px 1px rgba(53, 119, 212, 0.38);
+  }
+}
+:root[data-theme='dark'] .brand-logo {
+  animation-name: logo-glow-dark;
+}
+@keyframes logo-glow-dark {
+  0%,
+  100% {
+    box-shadow: 0 0 7px 1px rgba(120, 175, 255, 0.42);
+  }
+  50% {
+    box-shadow: 0 0 16px 3px rgba(120, 175, 255, 0.62);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo {
+    animation: none;
+  }
 }
 .brand-text {
   display: flex;
@@ -242,6 +279,7 @@ body {
   border-radius: 20px;
   padding: 22px 26px;
   overflow: hidden;
+  position: relative;
   box-shadow: 0 14px 34px rgba(53, 119, 212, 0.3);
 }
 .hero > *:not(.hero-bg) {
@@ -1057,7 +1095,7 @@ select.field {
   padding: 12px;
   border: 2px dashed var(--primary-2);
   border-radius: 11px;
-  background: #fff;
+  background: var(--surface);
   font-size: 13px;
   color: var(--ink-soft);
 }
@@ -1070,12 +1108,168 @@ select.field {
   color: var(--ink-soft);
 }
 
-.bookmarklet {
+
+.file-pick {
   display: block;
   text-align: center;
-  text-decoration: none;
-  cursor: grab;
+  cursor: pointer;
 }
-.bookmarklet:active {
-  cursor: grabbing;
+.file-pick input {
+  display: none;
+}
+
+.help-link {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+.help-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- тёмная тема ---------- */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --surface: #121a2b;
+  --ink: #e6ecf5;
+  --ink-soft: #8d9bb0;
+  --line: #22304a;
+  --field: #0f1727;
+  --primary: #4a8ae6;
+  --primary-2: #6aa8f0;
+  --primary-deep: #8dbbf5;
+  --green: #3ccf6e;
+  --amber: #e8ad3c;
+  --red: #ef5d6b;
+}
+/* Карточка балла в тёмной теме — глубже, чтобы белые цифры читались. */
+:root[data-theme='dark'] .hero {
+  background: linear-gradient(120deg, #1f4f9c 0%, #2f6fc6 100%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+:root[data-theme='dark'] .overlay {
+  background: rgba(2, 6, 14, 0.62);
+}
+:root[data-theme='dark'] .modal,
+:root[data-theme='dark'] .lang-menu {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+:root[data-theme='dark'] .field::placeholder {
+  color: #5f6f86;
+}
+
+/* Смена темы: новая раскрывается кругом от кнопки (View Transitions)… */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+/* …а где API нет — цвета просто плавно перетекают. */
+.theme-anim,
+.theme-anim *,
+.theme-anim *::before,
+.theme-anim *::after {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease,
+    box-shadow 0.4s ease !important;
+}
+
+/* ---------- переключатель темы ---------- */
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 38px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.theme-toggle:hover {
+  border-color: var(--primary-2);
+  color: var(--primary);
+}
+.theme-toggle .ti {
+  position: absolute;
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+/* В светлой теме видна луна (включит тёмную), в тёмной — солнце. */
+.ti-sun {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.4);
+}
+:root[data-theme='dark'] .ti-sun {
+  opacity: 1;
+  transform: none;
+  color: #ffcf5a;
+}
+:root[data-theme='dark'] .ti-moon {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.4);
+}
+
+/* ---------- пароль с кнопкой «показать» ---------- */
+.pass-wrap {
+  position: relative;
+}
+.pass-wrap input {
+  width: 100%;
+  padding-right: 48px;
+}
+.pass-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.pass-eye:hover {
+  color: var(--primary);
+  background: var(--field);
+}
+.pass-eye:focus-visible {
+  outline: 2px solid var(--primary-2);
+  outline-offset: 1px;
+}
+
+/* ---------- салют после удачного импорта (ПК, тёмная тема) ---------- */
+.fireworks {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* На телефоне логотип чуть меньше — шапке нужно место под тему и язык. */
+@media (max-width: 600px) {
+  .brand-logo {
+    width: 46px;
+    height: 46px;
+  }
 }

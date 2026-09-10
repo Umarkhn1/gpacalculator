@@ -2,7 +2,13 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- Масштаб страницы зафиксирован: без щипка и двойного тапа.
+         iOS Safari игнорирует user-scalable=no, поэтому жест гасим и скриптом. -->
+    <script>
+      document.addEventListener('gesturestart', function (e) { e.preventDefault() })
+      document.addEventListener('touchmove', function (e) { if (e.touches.length > 1) e.preventDefault() }, { passive: false })
+    </script>
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>GPA · статистика</title>
@@ -24,6 +30,8 @@
         --sans: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       }
       * { box-sizing: border-box; }
+      /* Только прокрутка — щипок и двойной тап не увеличивают страницу. */
+      html, body { touch-action: pan-x pan-y; }
       html, body { margin: 0; min-height: 100%; }
       body {
         background: var(--bg);
@@ -43,7 +51,7 @@
         flex-wrap: wrap;
       }
       .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-      .brand-logo { width: 42px; height: 42px; object-fit: contain; flex: none; }
+      .brand-logo { width: 46px; height: 46px; object-fit: contain; flex: none; }
       .brand-text { display: flex; flex-direction: column; line-height: 1.25; }
       .brand-name {
         font-size: 17px;
@@ -166,6 +174,16 @@
 
       const esc = (s) =>
         String(s == null ? '' : s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c])
+      // Логотип — по сетке физических пикселей, иначе на масштабе 125–150% он мылится.
+      const snapLogo = (function () {
+        var el = document.querySelector('.brand-logo')
+        if (!el) return
+        el.style.transform = ''
+        var r = el.getBoundingClientRect(), d = window.devicePixelRatio || 1, top = r.top + window.scrollY
+        var dx = (Math.round(r.left * d) - r.left * d) / d, dy = (Math.round(top * d) - top * d) / d
+        el.style.transform = dx || dy ? 'translate(' + dx + 'px, ' + dy + 'px)' : ''
+      })
+      window.addEventListener('resize', snapLogo)
       const dt = (s) => (s ? new Date(s).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 
       // Колонки таблицы: ключ данных, заголовок, как показывать и как сортировать.
@@ -302,7 +320,7 @@
 
         app.innerHTML =
           '<div class="topbar"><div class="brand">' +
-          '<img src="/logo.png" alt="" class="brand-logo" />' +
+          '<img src="/logo-92.png" srcset="/logo-46.png 46w, /logo-52.png 52w, /logo-58.png 58w, /logo-65.png 65w, /logo-69.png 69w, /logo-78.png 78w, /logo-92.png 92w, /logo-104.png 104w, /logo-138.png 138w, /logo-156.png 156w" sizes="46px" width="46" height="46" alt="" class="brand-logo" />' +
           '<div class="brand-text"><span class="brand-name">GPA Calculator</span>' +
           '<span class="brand-tag">статистика импортов</span></div></div>' +
           '<div class="top-actions">' +
@@ -351,6 +369,7 @@
             render()
           }
         })
+        snapLogo()
         document.getElementById('reload').onclick = () => load(key)
         document.getElementById('out').onclick = () => {
           localStorage.removeItem(KEY_STORE)

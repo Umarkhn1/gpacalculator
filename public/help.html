@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#eef3f8" />
+    <!-- Тема до первого кадра: без вспышки светлого фона у тех, кто выбрал тёмную. -->
+    <script>
+      try {
+        var theme =
+          localStorage.getItem('tuit-gpa-theme') ||
+          (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        document.documentElement.dataset.theme = theme
+        if (theme === 'dark') document.querySelector('meta[name="theme-color"]').content = '#0b1220'
+      } catch (e) {}
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- Масштаб страницы зафиксирован: без щипка и двойного тапа.
+         iOS Safari игнорирует user-scalable=no, поэтому жест гасим и скриптом. -->
+    <script>
+      document.addEventListener('gesturestart', function (e) { e.preventDefault() })
+      document.addEventListener('touchmove', function (e) { if (e.touches.length > 1) e.preventDefault() }, { passive: false })
+    </script>
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <title>Импорт без входа — GPA Calculator</title>
+    <meta
+      name="description"
+      content="Как перенести оценки из LMS ТУИТ в GPA Calculator без логина и пароля: сохранённой страницей учебного плана или копированием."
+    />
+    <style>
+      /* Палитра и шрифты — те же, что в калькуляторе (src/styles.css). */
+      :root {
+        --bg: #eef3f8;
+        --surface: #ffffff;
+        --ink: #0c1225;
+        --ink-soft: #5b6b7d;
+        --line: #dbe4ec;
+        --field: #f1f6fa;
+        --primary: #3577d4;
+        --primary-2: #5a9ae6;
+        --primary-deep: #2a63bb;
+        --sans: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.5;
+      }
+      [hidden] { display: none !important; }
+      /* Только прокрутка — щипок и двойной тап не увеличивают страницу. */
+      html, body { touch-action: pan-x pan-y; }
+      .page { max-width: 760px; margin: 0 auto; padding: 22px 16px 56px; }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 26px;
+      }
+      .brand { display: flex; align-items: center; gap: 11px; min-width: 0; color: inherit; text-decoration: none; }
+      .brand-logo { width: 52px; height: 52px; object-fit: contain; flex: none; }
+      @media (max-width: 600px) { .brand-logo { width: 46px; height: 46px; } }
+      .brand-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+      .brand-name {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        background: linear-gradient(120deg, var(--primary), var(--primary-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        white-space: nowrap;
+      }
+      .brand-tag { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .back {
+        flex: none;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--surface);
+        color: var(--primary-deep);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      h1 { margin: 0 0 8px; font-size: clamp(22px, 5.4vw, 28px); letter-spacing: -0.01em; line-height: 1.2; }
+      .lead { margin: 0 0 20px; color: var(--ink-soft); font-size: 15px; }
+
+      /* Выбор способа: две карточки, на телефоне тоже рядом. */
+      .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+      .method {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 14px;
+        border: 1.5px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+      .method svg { color: var(--primary); margin-bottom: 6px; }
+      .method b { font-size: 15px; line-height: 1.3; }
+      .method span { font-size: 12.5px; color: var(--ink-soft); }
+      .method.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(53, 119, 212, 0.14); }
+
+      .browsers { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+      .b-label { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+      .seg { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: var(--field); }
+      .seg button {
+        padding: 8px 20px;
+        border: 0;
+        border-radius: 9px;
+        background: none;
+        color: var(--ink-soft);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .seg button.active { background: var(--surface); color: var(--primary-deep); box-shadow: 0 1px 3px rgba(12, 18, 37, 0.12); }
+
+      .steps { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+      .step { padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+      .s-head { display: flex; gap: 12px; align-items: flex-start; }
+      .num {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: linear-gradient(120deg, var(--primary), var(--primary-2));
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .s-head p { margin: 3px 0 0; font-size: 15px; }
+      .plan-link {
+        display: inline-block;
+        margin: 10px 0 0 40px;
+        color: var(--primary);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .shot {
+        display: block;
+        width: 100%;
+        max-width: 280px;
+        height: auto;
+        margin: 14px auto 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      .shot.wide { max-width: 100%; }
+      .step.final { border-color: var(--primary); background: linear-gradient(180deg, #f5f9ff, var(--surface)); }
+      .to-calc {
+        display: block;
+        margin-top: 14px;
+        padding: 12px 18px;
+        border-radius: 12px;
+        background: linear-gradient(120deg, var(--primary), var(--primary-2));
+        box-shadow: 0 10px 22px rgba(53, 119, 212, 0.25);
+        color: #fff;
+        font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+      }
+      .note { margin: 18px 4px 0; color: var(--ink-soft); font-size: 13px; }
+
+      @media (min-width: 640px) {
+        .page { padding-top: 32px; }
+        .to-calc { display: inline-block; margin-left: 40px; }
+        .shot { max-width: 300px; }
+        .shot.wide { max-width: 100%; }
+      }
+      /* Тёмная тема — та же, что в калькуляторе. */
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #0b1220;
+        --surface: #121a2b;
+        --ink: #e6ecf5;
+        --ink-soft: #8d9bb0;
+        --line: #22304a;
+        --field: #0f1727;
+        --primary: #4a8ae6;
+        --primary-2: #6aa8f0;
+        --primary-deep: #8dbbf5;
+      }
+      :root[data-theme='dark'] .step.final { background: linear-gradient(180deg, #14213a, var(--surface)); }
+
+      /* Логотип мягко светится — сильнее в тёмной теме. */
+      .brand-logo { border-radius: 50%; animation: logo-glow 4.5s ease-in-out infinite; }
+      @keyframes logo-glow {
+        0%, 100% { box-shadow: 0 0 5px 0 rgba(53, 119, 212, 0.25); }
+        50% { box-shadow: 0 0 10px 1px rgba(53, 119, 212, 0.38); }
+      }
+      :root[data-theme='dark'] .brand-logo { animation-name: logo-glow-dark; }
+      @keyframes logo-glow-dark {
+        0%, 100% { box-shadow: 0 0 7px 1px rgba(120, 175, 255, 0.42); }
+        50% { box-shadow: 0 0 16px 3px rgba(120, 175, 255, 0.62); }
+      }
+      @media (prefers-reduced-motion: reduce) { .brand-logo { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <img src="/logo-104.png" srcset="/logo-46.png 46w, /logo-52.png 52w, /logo-58.png 58w, /logo-65.png 65w, /logo-69.png 69w, /logo-78.png 78w, /logo-92.png 92w, /logo-104.png 104w, /logo-138.png 138w, /logo-156.png 156w" sizes="(max-width: 600px) 46px, 52px" width="52" height="52" alt="" class="brand-logo" />
+          <span class="brand-text">
+            <span class="brand-name">GPA Calculator</span>
+            <span class="brand-tag" data-t="tag"></span>
+          </span>
+        </a>
+        <a class="back" href="/" data-t="back"></a>
+      </header>
+
+      <h1 data-t="title"></h1>
+      <p class="lead" data-t="lead"></p>
+
+      <div class="choice" role="tablist">
+        <button type="button" class="method" data-method="file" role="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="6" y="2" width="12" height="20" rx="2.5" /><line x1="11" y1="18" x2="13" y2="18" />
+          </svg>
+          <b data-t="methodFile"></b>
+          <span data-t="methodFileSub"></span>
+        </button>
+        <button type="button" class="method" data-method="copy" role="tab">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="4" width="20" height="13" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+          <b data-t="methodCopy"></b>
+          <span data-t="methodCopySub"></span>
+        </button>
+      </div>
+
+      <div class="browsers" id="browsers" hidden>
+        <span class="b-label" data-t="browser"></span>
+        <div class="seg">
+          <button type="button" data-browser="chrome">Chrome</button>
+          <button type="button" data-browser="safari">Safari</button>
+        </div>
+      </div>
+
+      <ol class="steps" id="steps"></ol>
+      <p class="note" data-t="note"></p>
+    </div>
+
+    <script>
+      const PLAN = 'https://lms.tuit.uz/student/study-plan'
+
+      // Скриншоты шагов с размерами — чтобы страница не прыгала при загрузке.
+      const SHOTS = {
+        chrome: [['chrome-1', 640, 1280], ['chrome-2', 639, 1280]],
+        safari: [['safari-1', 640, 1262], ['safari-2', 640, 1262], ['safari-3', 590, 1208], ['safari-4', 590, 1212]],
+        copy: [['copy-1', 1200, 648], ['copy-2', 1200, 649]],
+      }
+
+      const I18N = {
+        ru: {
+          tag: 'импорт без входа',
+          back: '← Калькулятор',
+          title: 'Импорт без входа',
+          lead: 'Если вход по логину и паролю не работает, оценки можно перенести из сохранённой страницы учебного плана. Выберите удобный способ.',
+          methodFile: 'Загрузить файлом',
+          methodFileSub: 'Удобнее на телефоне',
+          methodCopy: 'Скопировать и вставить',
+          methodCopySub: 'Удобнее на компьютере',
+          browser: 'Ваш браузер',
+          openPlan: 'Открыть учебный план',
+          toCalc: 'Открыть калькулятор',
+          calc1: 'Откройте калькулятор и нажмите «Импорт из LMS».',
+          calc2: 'Нажмите «Импорт без пароля».',
+          fileLast: 'Нажмите «Загрузить файлом (HTML)» и выберите сохранённый файл — оценки подставятся сами.',
+          pasteLast: 'Щёлкните по полю вставки и нажмите Ctrl+V (на Mac — ⌘V) — оценки подставятся сами.',
+          note: 'Пароль не нужен: используется только страница, которую вы сохранили или скопировали.',
+          steps: {
+            chrome: [
+              'Войдите в LMS и откройте учебный план. Нажмите ⋮ в правом верхнем углу.',
+              'Нажмите значок загрузки ⬇ в верхней строке меню — страница сохранится в «Загрузки».',
+            ],
+            safari: [
+              'Войдите в LMS и откройте учебный план. Нажмите «⋯» в правом нижнем углу, затем «Поделиться».',
+              'В открывшемся меню нажмите «Параметры».',
+              'Выберите «Веб-архив» и нажмите галочку.',
+              'В меню «Поделиться» выберите «Сохранить в Файлы» и нажмите «Сохранить».',
+            ],
+            copy: [
+              'Войдите в LMS и откройте учебный план.',
+              'Нажмите Ctrl+A, затем Ctrl+C (на Mac — ⌘A и ⌘C): выделится и скопируется вся страница.',
+            ],
+          },
+        },
+        uz: {
+          tag: 'kirishsiz import',
+          back: '← Kalkulyator',
+          title: 'Kirishsiz import',
+          lead: "Login va parol bilan kirish ishlamasa, baholarni saqlangan o'quv rejasi sahifasidan ko'chirish mumkin. Qulay usulni tanlang.",
+          methodFile: 'Fayl bilan yuklash',
+          methodFileSub: 'Telefonda qulay',
+          methodCopy: "Nusxalash va qo'yish",
+          methodCopySub: 'Kompyuterda qulay',
+          browser: 'Brauzeringiz',
+          openPlan: "O'quv rejasini ochish",
+          toCalc: 'Kalkulyatorni ochish',
+          calc1: 'Kalkulyatorni oching va «LMS dan import»ni bosing.',
+          calc2: '«Parolsiz import»ni bosing.',
+          fileLast: "«Fayl bilan yuklash (HTML)»ni bosing va saqlangan faylni tanlang — baholar o'zi qo'yiladi.",
+          pasteLast: "Qo'yish maydonini bosing va Ctrl+V ni bosing (Mac da — ⌘V) — baholar o'zi qo'yiladi.",
+          note: "Parol kerak emas: faqat siz saqlagan yoki nusxalagan sahifa ishlatiladi.",
+          steps: {
+            chrome: [
+              "LMS ga kiring va o'quv rejasini oching. O'ng yuqoridagi ⋮ ni bosing.",
+              "Menyu yuqorisidagi ⬇ yuklab olish belgisini bosing — sahifa «Yuklanmalar»ga saqlanadi.",
+            ],
+            safari: [
+              "LMS ga kiring va o'quv rejasini oching. O'ng pastdagi «⋯» ni, so'ng «Ulashish»ni bosing.",
+              'Ochilgan menyuda «Parametrlar»ni bosing.',
+              '«Veb-arxiv»ni tanlang va belgini bosing.',
+              "«Ulashish» menyusida «Fayllarga saqlash»ni tanlang va «Saqlash»ni bosing.",
+            ],
+            copy: [
+              "LMS ga kiring va o'quv rejasini oching.",
+              "Ctrl+A, so'ng Ctrl+C ni bosing (Mac da — ⌘A va ⌘C): butun sahifa belgilanib, nusxalanadi.",
+            ],
+          },
+        },
+        kaa: {
+          tag: 'kiriwsiz import',
+          back: '← Kalkulyator',
+          title: 'Kiriwsiz import',
+          lead: 'Login hám parol menen kiriw islemese, bahalardı saqlanǵan oqıw rejesi betinen kóshiriw múmkin. Qolaylı usıldı saylań.',
+          methodFile: 'Fayl menen júklew',
+          methodFileSub: 'Telefonda qolaylı',
+          methodCopy: 'Kóshirip qoyıw',
+          methodCopySub: 'Kompyuterde qolaylı',
+          browser: 'Brauzerińiz',
+          openPlan: 'Oqıw rejesin ashıw',
+          toCalc: 'Kalkulyatordı ashıw',
+          calc1: 'Kalkulyatordı ashıń hám «LMS den import»tı basıń.',
+          calc2: '«Parolsız import»tı basıń.',
+          fileLast: '«Fayl menen júklew (HTML)»di basıń hám saqlanǵan fayldı saylań — bahalar ózi qoyıladı.',
+          pasteLast: 'Qoyıw maydanın basıń hám Ctrl+V basıń (Mac ta — ⌘V) — bahalar ózi qoyıladı.',
+          note: 'Parol kerek emes: tek siz saqlaǵan yamasa kóshirgen bet paydalanıladı.',
+          steps: {
+            chrome: [
+              'LMS ke kiriń hám oqıw rejesin ashıń. Oń joqarıdaǵı ⋮ túymesin basıń.',
+              'Menyu joqarısındaǵı ⬇ júklep alıw belgisin basıń — bet «Júklemeler»ge saqlanadı.',
+            ],
+            safari: [
+              'LMS ke kiriń hám oqıw rejesin ashıń. Oń tómendegi «⋯» túymesin, sońınan «Bólisiw»di basıń.',
+              'Ashılǵan menyuda «Parametrler»di basıń.',
+              '«Veb-arxiv»ti saylań hám belgini basıń.',
+              '«Bólisiw» menyusında «Fayllarǵa saqlaw»dı saylań hám «Saqlaw»dı basıń.',
+            ],
+            copy: [
+              'LMS ke kiriń hám oqıw rejesin ashıń.',
+              'Ctrl+A, sońınan Ctrl+C basıń (Mac ta — ⌘A hám ⌘C): pútkil bet belgilenip, kóshiriledi.',
+            ],
+          },
+        },
+        en: {
+          tag: 'import without signing in',
+          back: '← Calculator',
+          title: 'Import without signing in',
+          lead: "If signing in with a login and password doesn't work, you can transfer your grades from a saved study plan page. Pick the method that suits you.",
+          methodFile: 'Upload a file',
+          methodFileSub: 'Easiest on a phone',
+          methodCopy: 'Copy and paste',
+          methodCopySub: 'Easiest on a computer',
+          browser: 'Your browser',
+          openPlan: 'Open the study plan',
+          toCalc: 'Open the calculator',
+          calc1: 'Open the calculator and tap Import from LMS.',
+          calc2: 'Tap Import without a password.',
+          fileLast: 'Tap Upload a file (HTML) and pick the saved file — grades fill in by themselves.',
+          pasteLast: 'Click the paste field and press Ctrl+V (on a Mac — ⌘V) — grades fill in by themselves.',
+          note: 'No password needed: only the page you saved or copied is used.',
+          steps: {
+            chrome: [
+              'Sign in to LMS and open the study plan. Tap ⋮ in the top right corner.',
+              'Tap the download icon ⬇ in the top row of the menu — the page is saved to Downloads.',
+            ],
+            safari: [
+              'Sign in to LMS and open the study plan. Tap “⋯” in the bottom right, then Share.',
+              'In the menu that opens, tap Options.',
+              'Choose Web Archive and tap the check mark.',
+              'In the Share menu choose Save to Files, then tap Save.',
+            ],
+            copy: [
+              'Sign in to LMS and open the study plan.',
+              'Press Ctrl+A, then Ctrl+C (on a Mac — ⌘A and ⌘C): the whole page is selected and copied.',
+            ],
+          },
+        },
+      }
+
+      // Язык — тот же, что выбран в калькуляторе (или ?lang=).
+      let lang = 'ru'
+      try {
+        lang = new URLSearchParams(location.search).get('lang') || localStorage.getItem('tuit-gpa-lang') || 'ru'
+      } catch {}
+      if (!I18N[lang]) lang = 'ru'
+      const t = I18N[lang]
+      document.documentElement.lang = lang
+      document.title = t.title + ' — GPA Calculator'
+      document.querySelectorAll('[data-t]').forEach((el) => {
+        el.textContent = t[el.dataset.t]
+      })
+
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+      const isAndroid = /Android/.test(navigator.userAgent)
+
+      // Способ хранится в адресе (#file/chrome, #file/safari, #copy) — ссылкой можно поделиться.
+      // Без него угадываем по устройству.
+      function fromHash() {
+        const h = location.hash.slice(1)
+        if (h === 'copy') return { method: 'copy', browser: null }
+        const m = h.match(/^file\/(chrome|safari)$/)
+        if (m) return { method: 'file', browser: m[1] }
+        if (isIOS) return { method: 'file', browser: 'safari' }
+        if (isAndroid) return { method: 'file', browser: 'chrome' }
+        return { method: 'copy', browser: null }
+      }
+      let state = fromHash()
+
+      const esc = (s) =>
+        String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c])
+
+      function render() {
+        document.querySelectorAll('[data-method]').forEach((b) => {
+          const on = b.dataset.method === state.method
+          b.classList.toggle('active', on)
+          b.setAttribute('aria-selected', on)
+        })
+        document.getElementById('browsers').hidden = state.method !== 'file'
+        document.querySelectorAll('[data-browser]').forEach((b) => {
+          b.classList.toggle('active', b.dataset.browser === state.browser)
+        })
+
+        const key = state.method === 'copy' ? 'copy' : state.browser
+        // Шаги в LMS + общие шаги в калькуляторе. Файл загружают с телефона — там
+        // телефонные снимки калькулятора, вставляют с компьютера — там десктопные.
+        const kind = key === 'copy' ? 'd' : 'm'
+        const texts = [...t.steps[key], t.calc1, t.calc2, key === 'copy' ? t.pasteLast : t.fileLast]
+        const shots = [
+          ...SHOTS[key],
+          ...[1, 2, 3].map((n) => [
+            'calc-' + lang + '-' + kind + '-' + n,
+            kind === 'd' ? 1200 : 640,
+            kind === 'd' ? 750 : 1385,
+          ]),
+        ]
+        document.getElementById('steps').innerHTML = texts
+          .map((text, i) => {
+            const last = i === texts.length - 1
+            const shot = shots[i]
+            return (
+              '<li class="step' + (last ? ' final' : '') + '">' +
+              '<div class="s-head"><span class="num">' + (i + 1) + '</span><p>' + esc(text) + '</p></div>' +
+              (i === 0 ? '<a class="plan-link" href="' + PLAN + '" target="_blank" rel="noreferrer">' + esc(t.openPlan) + ' ↗</a>' : '') +
+              (shot
+                ? '<img class="shot' + (key === 'copy' ? ' wide' : '') + '" src="/help/' + shot[0] + '.jpg" width="' + shot[1] +
+                  '" height="' + shot[2] + '" alt="' + esc(text) + '" loading="' + (i === 0 ? 'eager' : 'lazy') + '" />'
+                : '') +
+              (i === texts.length - 3 ? '<a class="to-calc" href="/">' + esc(t.toCalc) + '</a>' : '') +
+              '</li>'
+            )
+          })
+          .join('')
+      }
+
+      function go(next) {
+        state = next
+        const hash = state.method === 'copy' ? 'copy' : 'file/' + state.browser
+        history.replaceState(null, '', '#' + hash)
+        render()
+      }
+
+      document.querySelectorAll('[data-method]').forEach((b) => {
+        b.onclick = () => {
+          const method = b.dataset.method
+          if (method === 'copy') return go({ method, browser: null })
+          go({ method, browser: state.browser || (isIOS ? 'safari' : 'chrome') })
+        }
+      })
+      document.querySelectorAll('[data-browser]').forEach((b) => {
+        b.onclick = () => go({ method: 'file', browser: b.dataset.browser })
+      })
+      window.addEventListener('hashchange', () => {
+        state = fromHash()
+        render()
+      })
+
+      render()
+    </script>
+    <script>
+      // Логотип — по сетке физических пикселей, иначе на масштабе 125–150% он мылится.
+      var snapLogo = (function () {
+        var el = document.querySelector('.brand-logo')
+        if (!el) return
+        el.style.transform = ''
+        var r = el.getBoundingClientRect(), d = window.devicePixelRatio || 1, top = r.top + window.scrollY
+        var dx = (Math.round(r.left * d) - r.left * d) / d, dy = (Math.round(top * d) - top * d) / d
+        el.style.transform = dx || dy ? 'translate(' + dx + 'px, ' + dy + 'px)' : ''
+      })
+      snapLogo()
+      window.addEventListener('resize', snapLogo)
+    </script>
+  </body>
+</html>
